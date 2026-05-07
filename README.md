@@ -1,6 +1,6 @@
 # iris
 
-A new Flutter project.
+基于大模型构建的语言学习App，使用Google的Gemma4移动端模型，可离线调用
 
 ## Getting Started
 

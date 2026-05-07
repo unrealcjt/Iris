@@ -1,9 +1,9 @@
-# iris
+# Iris
 
 基于大模型构建的语言学习App，使用Google的Gemma4移动端模型，可离线调用
 
 ## Getting Started
-
+![项目截图](assets/img/Iris_female.png)
 This project is a starting point for a Flutter application.
 
 A few resources to get you started if this is your first Flutter project:

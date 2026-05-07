@@ -1,4 +1,4 @@
-name: iris
+name: Iris
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -32,6 +32,7 @@ dependencies:
     sdk: flutter
 
   supabase_flutter: ^2.8.3
+  flutter_launcher_icons: ^0.14.4
   flutter_dotenv: ^5.2.1
   file_picker: ^8.1.7
   path_provider: ^2.1.5
@@ -43,8 +44,10 @@ dependencies:
   crypto: ^3.0.3
   cupertino_icons: ^1.0.8
   image_picker: ^1.0.7
+  image_cropper: ^8.0.2
   record: ^5.1.2
   audioplayers: ^6.0.0
+  video_player: ^2.8.2
   web_socket_channel: ^3.0.3
   uuid: ^4.0.0
   http: ^1.1.0
@@ -59,6 +62,19 @@ dependency_overrides:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+# 添加图标生成配置
+flutter_launcher_icons:
+  android: "launcher_icon"
+  image_path: "assets/img/icon_desk_v2.png"
+  min_sdk_android: 21 # 最低支持的安卓版本
+
+  web:
+    generate: true
+  windows:
+    generate: true
+  macos:
+    generate: true
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -81,6 +97,8 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - .env
+    - assets/img/
+    - assets/video/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

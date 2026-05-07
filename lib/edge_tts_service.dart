@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:edge_tts_dart/edge_tts_dart.dart';
+import 'package:flutter/cupertino.dart';
 
 class EdgeTtsService {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final List<Uint8List> _playQueue = [];
   bool _isQueuePlaying = false;
+  final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
 
   /// 生成语音并播放 (单次直接播放)
   Future<void> speak(String text, {String? voiceName}) async {
@@ -28,6 +30,7 @@ class EdgeTtsService {
   /// 顺序处理队列中的音频
   Future<void> _processQueue() async {
     _isQueuePlaying = true;
+    isPlayingNotifier.value = true;
     while (_playQueue.isNotEmpty) {
       final bytes = _playQueue.removeAt(0);
       try {
@@ -38,6 +41,7 @@ class EdgeTtsService {
         print('Edge TTS 播放片段失败: $e');
       }
     }
+    isPlayingNotifier.value = false;
     _isQueuePlaying = false;
   }
 
@@ -76,10 +80,12 @@ class EdgeTtsService {
   /// 顺序播放多个音频片段 (一次性传入列表)
   Future<void> playSegments(List<Uint8List> segments) async {
     await stop();
+    isPlayingNotifier.value = true;
     for (var segment in segments) {
       await _audioPlayer.play(BytesSource(segment));
       await _audioPlayer.onPlayerComplete.first;
     }
+    isPlayingNotifier.value = false;
   }
 
   /// 搜索可用声音

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:iris/audio_page.dart';
-import 'package:iris/visual_page.dart';
+import 'package:Iris/profile/audio_page.dart';
+import 'package:Iris/profile/visual_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'model_settings_page.dart';
-import 'chat_page.dart';
+import 'profile/model_settings_page.dart';
+import 'profile/chat_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});

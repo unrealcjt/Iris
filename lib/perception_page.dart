@@ -1,4 +1,9 @@
+import 'package:Iris/perception/analyze_problem_page.dart';
+import 'package:Iris/perception/recognizeObject_page.dart';
+import 'package:Iris/perception/scene_description_page.dart';
+import 'package:Iris/perception/translate_lines_page.dart';
 import 'package:flutter/material.dart';
+import 'perception/text_extraction_page.dart';
 
 class PerceptionPage extends StatefulWidget {
   const PerceptionPage({super.key});
@@ -64,35 +69,60 @@ class _PerceptionPageState extends State<PerceptionPage> with SingleTickerProvid
           title: '文字提取',
           subtitle: 'OCR 识别文本',
           color: Colors.blue,
-          onTap: () {},
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const TextExtractionPage()),
+            );
+          },
         ),
         _buildModuleCard(
           icon: Icons.landscape_rounded,
           title: '场景描述',
           subtitle: 'AI 描述画面',
           color: Colors.green,
-          onTap: () {},
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SceneDescriptionPage()),
+            );
+          },
         ),
         _buildModuleCard(
           icon: Icons.image_search_rounded,
           title: '看图识物',
           subtitle: '识别物体品类',
           color: Colors.orange,
-          onTap: () {},
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const RecognizeObjectPage()),
+            );
+          },
         ),
         _buildModuleCard(
           icon: Icons.translate_rounded,
           title: '台词翻译',
           subtitle: '精准译文分析',
           color: Colors.purple,
-          onTap: () {},
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const TranslateLinesPage()),
+            );
+          },
         ),
         _buildModuleCard(
           icon: Icons.psychology_rounded,
           title: '题目分析',
           subtitle: '拍照解题思路',
           color: Colors.red,
-          onTap: () {},
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const AnalyzeProblemPage()),
+            );
+          },
         ),
       ],
     );

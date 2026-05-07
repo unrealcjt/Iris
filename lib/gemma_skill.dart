@@ -48,6 +48,7 @@ class GemmaSkill {
       topK: topK,
       enableVisionModality: imageBytes != null,
       enableAudioModality: audioBytes != null,
+      systemInstruction: "严格按照用户提示词给出的格式输出，禁止格式外的问候语"
     );
 
     Message message;
@@ -96,7 +97,7 @@ class GemmaSkill {
   /// 文字提取 (OCR)
   Stream<String> extractText({required Uint8List imageBytes}) {
     return _generate(
-      prompt: "请提取并列出图片中可见的所有文字内容。只需输出提取的文字，不要有多余的描述。",
+      prompt: "请提取并列出图片中可见的所有日语文字内容。只需输出提取的文字，不要有多余的描述。",
       imageBytes: imageBytes,
     );
   }
@@ -104,7 +105,7 @@ class GemmaSkill {
   /// 场景描述
   Stream<String> describeScene({required Uint8List imageBytes}) {
     return _generate(
-      prompt: "请详细描述这张图片中的场景，包括环境、人物、动作以及整体氛围。请用中文回答。",
+      prompt: "请使用日语描述这张图片中的场景，包括环境、人物、动作以及整体氛围。",
       imageBytes: imageBytes,
     );
   }
@@ -112,23 +113,34 @@ class GemmaSkill {
   /// 看图识物
   Stream<String> recognizeObject({required Uint8List imageBytes}) {
     return _generate(
-      prompt: "请识别这张图片中的主要物体，说明它们的品类、特征以及可能的用途。请用中文回答。",
+      prompt: "请识别这张图片中的主要物体，直接按照逗号隔开格式输出物品名字。请用日语回答。",
       imageBytes: imageBytes,
+    );
+  }
+
+  /// 文化解析
+  Stream<String> cultureResolve({required String res}) {
+    return _generate(
+      prompt: "介绍一下在日本的${res}相关文化。请用日语回答。",
     );
   }
 
   /// 台词翻译
   Stream<String> translateLines({required Uint8List imageBytes, String targetLang = "中文"}) {
     return _generate(
-      prompt: "请识别图片中的台词或对话，并将其翻译成$targetLang。请保留原有的语气，并提供必要的背景解释。",
+      prompt: "请识别图片中的台词或对话，并将其翻译成$targetLang。请提供必要的语气分析。",
       imageBytes: imageBytes,
     );
   }
 
   /// 题目分析
-  Stream<String> analyzeProblem({required Uint8List imageBytes}) {
+  Stream<String> analyzeProblem({required Uint8List imageBytes, String? additionalContext}) {
+    String prompt = "请分析图片中的题目。首先识别题目内容，然后提供详细的解题思路和步骤。请用中文回答。";
+    if (additionalContext != null && additionalContext.isNotEmpty) {
+      prompt = "补充背景：$additionalContext\n\n$prompt";
+    }
     return _generate(
-      prompt: "请分析图片中的题目。首先识别题目内容，然后提供详细的解题思路和步骤。请用中文回答。",
+      prompt: prompt,
       imageBytes: imageBytes,
     );
   }

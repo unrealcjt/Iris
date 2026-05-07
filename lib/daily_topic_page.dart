@@ -61,12 +61,27 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
     setState(() {
       _savedTopics = prefs.getStringList('saved_daily_topics') ?? [];
       _language = prefs.getString('scenario_language') ?? "中文";
+      _selectedVoice = prefs.getString('scenario_voice');
     });
   }
 
   Future<void> _saveTopics() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('saved_daily_topics', _savedTopics);
+  }
+
+  Future<void> _saveLanguage(String lang) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('scenario_language', lang);
+  }
+
+  Future<void> _saveVoice(String? voice) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (voice != null) {
+      await prefs.setString('scenario_voice', voice);
+    } else {
+      await prefs.remove('scenario_voice');
+    }
   }
 
   @override
@@ -852,6 +867,22 @@ $styleInstruction
                                 " (${v.shortName.split('-').last})",
                                 style: TextStyle(fontSize: 10, color: Colors.grey.withValues(alpha: 0.6)),
                               ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: Icon(Icons.play_circle_outline, size: 22, color: Theme.of(context).colorScheme.primary),
+                                tooltip: "试听",
+                                constraints: const BoxConstraints(),
+                                padding: EdgeInsets.zero,
+                                onPressed: () {
+                                  String previewText = "你好！很高兴能和你探讨今日的话题。";
+                                  if (tempLanguage == "English") {
+                                    previewText = "Hello! I am happy to discuss today's topic with you.";
+                                  } else if (tempLanguage == "日本語") {
+                                    previewText = "こんにちは！今日のトピックについてお話しできるのを楽しみにしています。";
+                                  }
+                                  _ttsService.speak(previewText, voiceName: v.shortName);
+                                },
+                              ),
                             ],
                           ),
                         );
@@ -887,6 +918,8 @@ $styleInstruction
                           _showDetails = tempShowDetails;
                           _isFormal = tempIsFormal;
                         });
+                        _saveLanguage(tempLanguage);
+                        _saveVoice(tempVoice);
                         Navigator.pop(context);
                         if (tempModelFile != null) _loadModel(tempModelFile!);
                       },

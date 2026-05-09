@@ -6,6 +6,9 @@ import 'auth_page.dart';
 import 'profile_page.dart';
 import 'sessions_page.dart';
 import 'perception_page.dart';
+import 'practice_page.dart';
+import 'iris_assistant/mascot_widget.dart';
+import 'iris_assistant/mascot_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,8 +49,29 @@ class IrisApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
+      navigatorObservers: [MascotRouteObserver()],
+      builder: (context, child) {
+        return Stack(
+          children: [
+            if (child != null) child,
+            const IrisMascotOverlay(),
+          ],
+        );
+      },
       home: const AuthStateWrapper(),
     );
+  }
+}
+
+class MascotRouteObserver extends NavigatorObserver {
+  @override
+  void didPush(Route route, Route? previousRoute) {
+    MascotController().updateRoute(route);
+  }
+
+  @override
+  void didPop(Route route, Route? previousRoute) {
+    MascotController().updateRoute(previousRoute);
   }
 }
 
@@ -79,12 +103,12 @@ class MainContainer extends StatefulWidget {
 }
 
 class _MainContainerState extends State<MainContainer> {
-  int _selectedIndex = 2; // Default to '幻境' (Center)
+  int _selectedIndex = 0; // Default to '幻境' (Center)
 
   final List<Widget> _pages = [
-    const Center(child: Text('修行 板块', style: TextStyle(fontSize: 24))),
+    const PracticePage(),
     const SessionsPage(),
-    const Center(child: Text('幻境 板块 (灵动中心)', style: TextStyle(fontSize: 24))),
+    // const Center(child: Text('幻境 板块 (灵动中心)', style: TextStyle(fontSize: 24))),
     const PerceptionPage(),
     const ProfilePage(),
   ];
@@ -102,21 +126,6 @@ class _MainContainerState extends State<MainContainer> {
         duration: const Duration(milliseconds: 300),
         child: _pages[_selectedIndex],
       ),
-      floatingActionButton: FloatingActionButton(
-        shape: const CircleBorder(),
-        onPressed: () => _onItemTapped(2),
-        backgroundColor: _selectedIndex == 2 
-            ? Theme.of(context).colorScheme.primary 
-            : Theme.of(context).colorScheme.primaryContainer,
-        elevation: 4,
-        child: Icon(
-          Icons.auto_awesome,
-          color: _selectedIndex == 2 
-              ? Theme.of(context).colorScheme.onPrimary 
-              : Theme.of(context).colorScheme.onPrimaryContainer,
-          size: 32,
-        ),
-      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
@@ -128,8 +137,8 @@ class _MainContainerState extends State<MainContainer> {
             _buildNavItem(0, Icons.self_improvement, '修行'),
             _buildNavItem(1, Icons.chat_bubble_outline, '会话'),
             const SizedBox(width: 48), // Space for FAB
-            _buildNavItem(3, Icons.visibility_outlined, '感知'),
-            _buildNavItem(4, Icons.person_outline, '我的'),
+            _buildNavItem(2, Icons.visibility_outlined, '感知'),
+            _buildNavItem(3, Icons.person_outline, '我的'),
           ],
         ),
       ),

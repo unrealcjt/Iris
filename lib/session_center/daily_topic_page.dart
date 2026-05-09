@@ -7,8 +7,9 @@ import 'package:path/path.dart' as p;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:edge_tts_dart/edge_tts_dart.dart' show Voice;
-import 'gemma_skill.dart';
-import 'edge_tts_service.dart';
+import 'package:Iris/utils/gemma_skill.dart';
+import 'package:Iris/utils/edge_tts_service.dart';
+import 'package:Iris/iris_assistant/mascot_controller.dart';
 
 class DailyTopicPage extends StatefulWidget {
   const DailyTopicPage({super.key});
@@ -62,6 +63,13 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
       _savedTopics = prefs.getStringList('saved_daily_topics') ?? [];
       _language = prefs.getString('scenario_language') ?? "中文";
       _selectedVoice = prefs.getString('scenario_voice');
+      final savedModelPath = prefs.getString('daily_topic_model');
+      if (savedModelPath != null) {
+        final file = File(savedModelPath);
+        if (file.existsSync()) {
+          _currentModelFile = file;
+        }
+      }
     });
   }
 
@@ -82,6 +90,11 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
     } else {
       await prefs.remove('scenario_voice');
     }
+  }
+
+  Future<void> _saveModelPath(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('daily_topic_model', path);
   }
 
   @override
@@ -151,7 +164,11 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
   Future<void> _initChat() async {
     _fetchVoices();
     await _loadModelFiles();
-    if (_availableModels.isNotEmpty) {
+    await _loadSavedTopics(); // 确保加载了保存的模型
+
+    if (_currentModelFile != null && _currentModelFile!.existsSync()) {
+      _loadModel(_currentModelFile!);
+    } else if (_availableModels.isNotEmpty) {
       final e2bModel = _availableModels.firstWhere(
         (f) => f.path.toLowerCase().contains('e2b'),
         orElse: () => _availableModels.first,
@@ -190,11 +207,15 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
   Future<void> _loadModel(File modelFile) async {
     if (_isGenerating) return;
     
+    // 关键：在开启新会话前，强制结束 Mascot 悬浮球的会话和加载状态
+    MascotController().resetChat();
+
     setState(() {
       _isLoadingModel = true;
       _currentModelFile = modelFile;
       _loadingStatus = "正在捕捉今日灵感...";
     });
+    MascotController().setVisible(false);
 
     try {
       if (_chatSession != null) {
@@ -257,6 +278,7 @@ $styleInstruction
         _activeTtsTasks.clear();
       });
 
+      MascotController().setVisible(false);
       await _generateInitialTopic();
 
     } catch (e) {
@@ -527,6 +549,7 @@ $styleInstruction
       setState(() {
         _chatSession = null;
       });
+      MascotController().setVisible(true);
     }
 
     if (!mounted) return;
@@ -613,7 +636,7 @@ $styleInstruction
             mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (!isUser) _buildAvatar(Icons.auto_awesome, colorScheme.primary),
+              if (!isUser) _buildAvatar(Icons.auto_awesome, colorScheme.primary, path: "assets/img/icon_desk.png"),
               const SizedBox(width: 8),
               Flexible(
                 child: Container(
@@ -661,12 +684,40 @@ $styleInstruction
     );
   }
 
-  Widget _buildAvatar(IconData icon, Color color) {
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: color.withValues(alpha: 0.1),
-      child: Icon(icon, size: 18, color: color),
-    );
+  Widget _buildAvatar(IconData icon, Color color, {String path=""}) {
+    if (path != "") {
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.pinkAccent,
+          border: Border.all(color: Colors.pinkAccent, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.pinkAccent.withOpacity(0.4),
+              blurRadius: 15,
+              spreadRadius: 2,
+            )
+          ],
+        ),
+        child: ClipOval(
+          child: Image.asset(
+            path,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                Icon(Icons.auto_awesome, color: Colors.blue, size: 30),
+          ),
+        ),
+      );
+    }
+    else {
+      return CircleAvatar(
+        radius: 24,
+        backgroundColor: color.withValues(alpha: 0.1),
+        child: Icon(icon, size: 18, color: color),
+      );
+    }
   }
 
   Widget _buildInputArea(ColorScheme colorScheme) {
@@ -772,6 +823,16 @@ $styleInstruction
               tempVoice = null;
             }
 
+            // 确保 tempModelFile 指向 _availableModels 中的同一个实例，或者直接通过路径匹配
+            File? selectedModel;
+            try {
+              selectedModel = _availableModels.firstWhere(
+                (f) => f.path == tempModelFile?.path,
+              );
+            } catch (_) {
+              selectedModel = _availableModels.isNotEmpty ? _availableModels.first : null;
+            }
+
             return SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -794,7 +855,7 @@ $styleInstruction
                   ),
                   const SizedBox(height: 20),
                   DropdownButtonFormField<File>(
-                    value: tempModelFile,
+                    value: selectedModel,
                     decoration: const InputDecoration(labelText: "选择模型", border: OutlineInputBorder()),
                     items: _availableModels.map((file) => DropdownMenuItem(
                       value: file,
@@ -920,6 +981,9 @@ $styleInstruction
                         });
                         _saveLanguage(tempLanguage);
                         _saveVoice(tempVoice);
+                        if (tempModelFile != null) {
+                          _saveModelPath(tempModelFile!.path);
+                        }
                         Navigator.pop(context);
                         if (tempModelFile != null) _loadModel(tempModelFile!);
                       },

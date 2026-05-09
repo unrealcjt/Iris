@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import '../gemma_skill.dart';
+import 'package:Iris/utils/gemma_skill.dart';
 import 'vision_common.dart';
 
 class RecognizeObjectPage extends StatefulWidget {

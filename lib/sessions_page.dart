@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'scenario_chat_page.dart';
-import 'daily_topic_page.dart';
+import 'session_center/scenario_chat_page.dart';
+import 'session_center/daily_topic_page.dart';
 
 class SessionsPage extends StatelessWidget {
   const SessionsPage({super.key});

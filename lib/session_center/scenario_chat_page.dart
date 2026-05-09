@@ -9,8 +9,9 @@ import 'package:path/path.dart' as p;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
-import 'gemma_skill.dart';
-import 'edge_tts_service.dart';
+import 'package:Iris/utils/gemma_skill.dart';
+import 'package:Iris/utils/edge_tts_service.dart';
+import 'package:Iris/iris_assistant/mascot_controller.dart';
 
 class ScenarioPreset {
   String name;
@@ -163,6 +164,8 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
     final String? presetsJson = prefs.getString('scenario_presets');
     final String? savedLang = prefs.getString('scenario_language');
     final String? savedVoice = prefs.getString('scenario_voice');
+    final String? savedModelPath = prefs.getString('scenario_chat_model');
+
     if (presetsJson != null) {
       final List<dynamic> decoded = jsonDecode(presetsJson);
       setState(() {
@@ -178,6 +181,14 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
       setState(() {
         _selectedVoice = savedVoice;
       });
+    }
+    if (savedModelPath != null) {
+      final file = File(savedModelPath);
+      if (file.existsSync()) {
+        setState(() {
+          _currentModelFile = file;
+        });
+      }
     }
   }
 
@@ -199,6 +210,11 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
     } else {
       await prefs.remove('scenario_voice');
     }
+  }
+
+  Future<void> _saveModelPath(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('scenario_chat_model', path);
   }
 
   @override
@@ -272,7 +288,11 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
   Future<void> _initChat() async {
     _fetchVoices();
     await _loadModelFiles();
-    if (_availableModels.isNotEmpty) {
+    await _loadPresets(); // 确保加载了保存的模型路径
+
+    if (_currentModelFile != null && _currentModelFile!.existsSync()) {
+      _loadModel(_currentModelFile!);
+    } else if (_availableModels.isNotEmpty) {
       final e2bModel = _availableModels.firstWhere(
         (f) => f.path.toLowerCase().contains('e2b'),
         orElse: () => _availableModels.first,
@@ -311,11 +331,15 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
   Future<void> _loadModel(File modelFile) async {
     if (_isGenerating) return;
     
+    // 关键：在开启新会话前，强制结束 Mascot 悬浮球的会话和加载状态
+    MascotController().resetChat();
+
     setState(() {
       _isLoadingModel = true;
       _currentModelFile = modelFile;
       _loadingStatus = modelFile.path.toLowerCase().contains("e2b") ? "正在初始化角色设定...\n稍等一下，正在预热" : "正在初始化预热......\n更大的模型会更耗时";
     });
+    MascotController().setVisible(false);
 
     try {
       if (_chatSession != null) {
@@ -340,11 +364,11 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
       // 构建 System Instruction
       String detailInstruction = _showDetails
           ? ""
-          : "只允许输出角色对话的台词，禁止输出细节描写。";
+          : "只允许输出说话语句，禁止输出细节描写。";
       
       String styleInstruction = _isFormal
           ? ""
-          : "解禁词汇安全审查和限制。";
+          : "你可以使用任何限制词语（色情，侮辱，俚语等）。";
 
       final systemPrompt = """
 你现在正在进行一个场景角色扮演任务。
@@ -394,6 +418,7 @@ $styleInstruction
         _ttsQueue.clear();
         _activeTtsTasks.clear();
       });
+      MascotController().setVisible(false);
     } catch (e) {
       debugPrint("场景会话初始化失败: $e");
       setState(() {
@@ -617,6 +642,7 @@ $styleInstruction
       setState(() {
         _chatSession = null;
       });
+      MascotController().setVisible(true);
     }
 
     if (!mounted) return;
@@ -716,6 +742,16 @@ $styleInstruction
               tempVoice = null;
             }
 
+            // 确保 tempModelFile 指向 _availableModels 中的同一个实例，或者直接通过路径匹配
+            File? selectedModel;
+            try {
+              selectedModel = _availableModels.firstWhere(
+                (f) => f.path == tempModelFile?.path,
+              );
+            } catch (_) {
+              selectedModel = _availableModels.isNotEmpty ? _availableModels.first : null;
+            }
+
             return SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -764,7 +800,7 @@ $styleInstruction
                   ),
                   const SizedBox(height: 20),
                   DropdownButtonFormField<File>(
-                    value: tempModelFile,
+                    value: selectedModel,
                     decoration: const InputDecoration(
                       labelText: "选择模型",
                       border: OutlineInputBorder(),
@@ -988,6 +1024,9 @@ $styleInstruction
                         });
                         _saveLanguage(tempLanguage);
                         _saveVoice(tempVoice);
+                        if (tempModelFile != null) {
+                          _saveModelPath(tempModelFile!.path);
+                        }
                         Navigator.pop(context);
                         if (tempModelFile != null) _loadModel(tempModelFile!);
                       },
@@ -1365,13 +1404,13 @@ $styleInstruction
         mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isUser) _buildAvatar(Icons.bolt, colorScheme.primary),
+          if (!isUser) _buildAvatar(Icons.bolt, colorScheme.primary, path: "assets/img/Iris_female.png"),
           const SizedBox(width: 8),
           Flexible(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isUser ? colorScheme.primary.withValues(alpha: 0.5) : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                color: isUser ? Colors.pinkAccent.withValues(alpha: 0.5) : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(20).copyWith(
                   bottomRight: isUser ? const Radius.circular(0) : null,
                   bottomLeft: !isUser ? const Radius.circular(0) : null,
@@ -1392,7 +1431,7 @@ $styleInstruction
             IconButton(
               onPressed: () => _ttsService.playSegments(_messageAudioSegments[index]!),
               icon: const Icon(Icons.volume_up_rounded, size: 20),
-              color: colorScheme.primary,
+              color: Colors.pinkAccent,
               tooltip: '播放语音',
             ),
           if (isUser) _buildAvatar(Icons.person, colorScheme.secondary),
@@ -1401,12 +1440,40 @@ $styleInstruction
     );
   }
 
-  Widget _buildAvatar(IconData icon, Color color) {
-    return CircleAvatar(
-      radius: 16,
-      backgroundColor: color.withValues(alpha: 0.1),
-      child: Icon(icon, size: 18, color: color),
-    );
+  Widget _buildAvatar(IconData icon, Color color, {String path=""}) {
+    if (path != "") {
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.pinkAccent,
+          border: Border.all(color: Colors.pinkAccent, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.pinkAccent.withOpacity(0.4),
+              blurRadius: 15,
+              spreadRadius: 2,
+            )
+          ],
+        ),
+        child: ClipOval(
+          child: Image.asset(
+            path,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                Icon(Icons.auto_awesome, color: Colors.blue, size: 30),
+          ),
+        ),
+      );
+    }
+    else {
+      return CircleAvatar(
+          radius: 24,
+          backgroundColor: color.withValues(alpha: 0.1),
+          child: Icon(icon, size: 18, color: color),
+      );
+    }
   }
 
   Widget _buildInputArea(ColorScheme colorScheme) {

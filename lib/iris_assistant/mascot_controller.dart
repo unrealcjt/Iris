@@ -1,3 +1,4 @@
+import 'package:Iris/utils/gemma_skill.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'dart:io';
@@ -6,7 +7,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:Iris/utils/edge_tts_service.dart';
-import 'package:video_player/video_player.dart';
 
 enum MascotDisplayMode { docked, floating }
 enum MascotAssistantMode { assistant, chat }
@@ -90,8 +90,13 @@ class MascotController extends ChangeNotifier {
   final List<String> _ttsQueue = [];
   bool _isProcessingTts = false;
 
+  String _helpText = "";
+  String get helpText => _helpText;
+
   InferenceModel? _model;
   InferenceChat? _chat;
+
+  final GemmaSkill _gemmaSkill = GemmaSkill();
 
   void setAssistantMode(MascotAssistantMode mode) {
     if (_assistantMode != mode) {
@@ -102,6 +107,7 @@ class MascotController extends ChangeNotifier {
       
       // 切换模式时，如果是切到聊天且没有初始化，可以在这里或者发送时初始化
       if (mode == MascotAssistantMode.chat) {
+        _helpText = "";
         _ttsService.isPlayingNotifier.addListener(_onTtsStatusChanged);
         _initChatSession();
       } else {
@@ -201,6 +207,32 @@ class MascotController extends ChangeNotifier {
     }
   }
 
+  void activeMascot(String text) {
+    resetChat();
+    _closeChatSession();
+    // 调出助手界面
+    setAssistantMode(MascotAssistantMode.assistant);
+    _helpText = text;
+    _currentDialogueText = """
+Ciallo～(∠・ω< )⌒☆你选择了这部分内容:\n
+`${text}`\n
+有什么要我帮助你的吗？点击旁边这些小工具我都可以帮你。这些不够的话，可以到聊天模式具体地问Iris哦!
+""";
+    setExpanded(true);
+  }
+
+  void setHelpText(String text) {
+    _helpText = text;
+    notifyListeners();
+  }
+
+  void clearHelpText() => _helpText = "";
+
+  void refreshAssistText() {
+    setHelpText("");
+    _currentDialogueText = "已切换到助手模式，随时待命。";
+  }
+
   void resetChat() {
     _closeChatSession();
     _isGenerating = false;
@@ -216,6 +248,46 @@ class MascotController extends ChangeNotifier {
     _chatMessages.clear();
     _ttsQueue.clear();
     _ttsService.stop();
+  }
+
+  Future<void> translate({String targetLang = "中文"}) async {
+    if (helpText.isEmpty || _isGenerating) return;
+    _isGenerating = true;
+    final content = _helpText;
+    _currentDialogueText = "";
+    notifyListeners();
+
+    if (_selectedModelPath == null) {
+      _currentDialogueText = "未选择模型";
+      _isGenerating = false;
+      notifyListeners();
+      return;
+    }
+
+    final file = File(_selectedModelPath!);
+    if (file.existsSync()) {
+      await _gemmaSkill.initialize(modelFile: file);
+    }
+    String fullResponse = "";
+    try {
+      final stream = _gemmaSkill.japaneseTranslate(content: content, targetLang: targetLang);
+      await for (final response in stream) {
+        if (fullResponse.isEmpty) {
+          fullResponse = """
+`${helpText}`\n
+翻译为 $targetLang：\n
+""";
+        }
+        fullResponse += response;
+        _currentDialogueText = fullResponse;
+        notifyListeners();
+      }
+    } catch(e) {
+      _currentDialogueText = "$e";
+    } finally {
+      _isGenerating = false;
+      notifyListeners();
+    }
   }
 
   Future<void> sendMessage(String text) async {

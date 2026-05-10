@@ -1,4 +1,7 @@
+import 'package:Iris/custom_component/iris_selection_area.dart';
+import 'package:Iris/iris_assistant/mascot_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:Iris/utils/gemma_skill.dart';
 import 'package:Iris/session_center//scenario_chat_page.dart';
@@ -275,12 +278,46 @@ class _SceneDescriptionPageState extends VisionBaseState<SceneDescriptionPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                MarkdownBody(
-                  data: resultText,
-                  styleSheet: MarkdownStyleSheet(
-                    p: TextStyle(fontSize: 16, height: 1.6, color: colorScheme.onSurface),
+                IrisSelectionArea(
+                  child: MarkdownBody(
+                    data: resultText,
+                    styleSheet: MarkdownStyleSheet(
+                      p: TextStyle(fontSize: 16, height: 1.6, color: colorScheme.onSurface),
+                    ),
                   ),
-                ),
+                )
+                // SelectionArea(
+                //   contextMenuBuilder: (context, selectableRegionState) {
+                //     final buttonItems = selectableRegionState.contextMenuButtonItems;
+                //
+                //     buttonItems.insert(
+                //       0,
+                //       ContextMenuButtonItem(
+                //         label: 'Iris帮我',
+                //         onPressed: () async {
+                //           selectableRegionState.copySelection(SelectionChangedCause.toolbar);
+                //           selectableRegionState.hideToolbar();
+                //           await Future.delayed(const Duration(milliseconds: 100));
+                //           final data = await Clipboard.getData(Clipboard.kTextPlain);
+                //           if (data != null && data.text != null && data.text!.isNotEmpty) {
+                //             MascotController().activeMascot(data.text!);
+                //           }
+                //         },
+                //       ),
+                //     );
+                //
+                //     return AdaptiveTextSelectionToolbar.buttonItems(
+                //       anchors: selectableRegionState.contextMenuAnchors,
+                //       buttonItems: buttonItems,
+                //     );
+                //   },
+                //   child: MarkdownBody(
+                //     data: resultText,
+                //     styleSheet: MarkdownStyleSheet(
+                //       p: TextStyle(fontSize: 16, height: 1.6, color: colorScheme.onSurface),
+                //     ),
+                //   ),
+                // )
               ],
             ),
           ),

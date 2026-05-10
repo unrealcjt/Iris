@@ -16,11 +16,14 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
   final MascotController _controller = MascotController();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _inputController = TextEditingController();
+  final TextEditingController _translateInputController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
   late VideoPlayerController _talkingController;
   bool _wasExpanded = false;
   bool _isModelSelectionOpen = false; // 用于控制模型选择界面的显示
+  bool _isLanguageSelectionOpen = false; // 用于控制翻译语言选择界面的显示
+  bool _isTextInputOpen = false; // 用于控制翻译文本输入界面的显示
 
   @override
   void initState() {
@@ -35,6 +38,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
     _controller.removeListener(_onStateChanged);
     _scrollController.dispose();
     _inputController.dispose();
+    _translateInputController.dispose();
     _focusNode.dispose();
     _talkingController.dispose();
     super.dispose();
@@ -62,6 +66,9 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
     if (_wasExpanded && !_controller.isExpanded) {
       _focusNode.unfocus();
       _isModelSelectionOpen = false;
+      _isLanguageSelectionOpen = false;
+      _isTextInputOpen = false;
+      _translateInputController.clear();
     }
     _wasExpanded = _controller.isExpanded;
 
@@ -270,6 +277,12 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
 
                                 // 自定义模型选择遮罩层，取代 showDialog
                                 if (_isModelSelectionOpen) _buildModelSelectionOverlay(),
+                                
+                                // 语言选择遮罩层
+                                if (_isLanguageSelectionOpen) _buildLanguageSelectionOverlay(),
+
+                                // 文本输入遮罩层
+                                if (_isTextInputOpen) _buildTextInputOverlay(),
                               ],
                             ),
                           );
@@ -360,10 +373,134 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
         children: [
           _buildQuickAction(Icons.grid_4x4_rounded, "五十音"),
           const SizedBox(height: 12),
-          _buildQuickAction(Icons.translate_rounded, "翻译"),
+          GestureDetector(
+            onTap: () {
+              if (_controller.helpText.isEmpty) {
+                setState(() => _isTextInputOpen = true);
+              } else {
+                setState(() => _isLanguageSelectionOpen = true);
+              }
+            },
+            child: _buildQuickAction(Icons.translate_rounded, "翻译"),
+          ),
+
           const SizedBox(height: 12),
           _buildQuickAction(Icons.lightbulb_outline, "小知识"),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTextInputOverlay() {
+    return Container(
+      color: Colors.black87,
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 30),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.grey[900],
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("输入要翻译的内容", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _translateInputController,
+                autofocus: true,
+                maxLines: 5,
+                minLines: 1,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: "在这里输入...",
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.05),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _isTextInputOpen = false);
+                      _translateInputController.clear();
+                    },
+                    child: const Text("取消"),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      final text = _translateInputController.text.trim();
+                      if (text.isNotEmpty) {
+                        _controller.setHelpText(text);
+                        setState(() {
+                          _isTextInputOpen = false;
+                          _isLanguageSelectionOpen = true;
+                        });
+                      }
+                    },
+                    child: const Text("确定"),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageSelectionOverlay() {
+    final languages = ["中文", "日语", "英语", "韩语", "德语", "法语"];
+    return Container(
+      color: Colors.black87,
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 40),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.grey[900],
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("选择目标语言", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: languages.map((lang) => InkWell(
+                  onTap: () {
+                    setState(() => _isLanguageSelectionOpen = false);
+                    _controller.translate(targetLang: lang);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Text(lang, style: const TextStyle(color: Colors.white)),
+                  ),
+                )).toList(),
+              ),
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: () => setState(() => _isLanguageSelectionOpen = false),
+                child: const Text("取消"),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -508,8 +645,22 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                     onTap: _controller.playExistedAudioSegments,
                     child: const Icon(
                       Icons.volume_up_rounded,
-                      color: Colors.white70,
+                      color: Colors.white,
                       size: 20,
+                    ),
+                  ),
+                ),
+              if (_controller.assistantMode == MascotAssistantMode.assistant)
+                Positioned(
+                  right: 16,
+                  child: GestureDetector(
+                    onTap: () {
+                      _controller.refreshAssistText();
+                    },
+                    child: const Icon(
+                      Icons.refresh,
+                      color: Colors.white,
+                      size: 30,
                     ),
                   ),
                 ),
@@ -555,6 +706,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                     backgroundColor: Colors.black.withOpacity(0.3),
                     color: Colors.amberAccent,
                     fontFamily: 'monospace',
+                    fontSize: 18
                   ),
                   codeblockDecoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.3),
@@ -574,46 +726,47 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       child: Row(
         children: [
-          Expanded(
-            child: TextField(
-              controller: _inputController,
-              focusNode: _focusNode,
-              style: const TextStyle(color: Colors.white),
-              keyboardType: TextInputType.multiline,
-              maxLines: null,
-              decoration: InputDecoration(
-                hintText: "想聊点什么？",
-                hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
-                filled: true,
-                fillColor: Colors.black.withOpacity(0.5),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25),
-                  borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
+          if (!_controller.isGenerating)
+            Expanded(
+              child: TextField(
+                controller: _inputController,
+                focusNode: _focusNode,
+                style: const TextStyle(color: Colors.white),
+                keyboardType: TextInputType.multiline,
+                maxLines: null,
+                decoration: InputDecoration(
+                  hintText: "想聊点什么？",
+                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+                  filled: true,
+                  fillColor: Colors.black.withOpacity(0.5),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(25),
+                    borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(25),
+                    borderSide: BorderSide(color: colorScheme.primary),
+                  ),
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25),
-                  borderSide: BorderSide(color: colorScheme.primary),
+                onSubmitted: (_) => _handleSend(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: _handleSend,
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colorScheme.primary,
+                  shape: BoxShape.circle,
                 ),
+                child: _controller.isGenerating
+                    ? const Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
+                    : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
               ),
-              onSubmitted: (_) => _handleSend(),
             ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _handleSend,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: colorScheme.primary,
-                shape: BoxShape.circle,
-              ),
-              child: _controller.isGenerating
-                  ? const Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
-                  : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
-            ),
-          ),
         ],
       ),
     );

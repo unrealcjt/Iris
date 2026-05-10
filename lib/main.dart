@@ -9,6 +9,7 @@ import 'perception_page.dart';
 import 'practice_page.dart';
 import 'iris_assistant/mascot_widget.dart';
 import 'iris_assistant/mascot_controller.dart';
+import 'jm/dictionary_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +25,9 @@ void main() async {
     url: dotenv.get('SUPABASE_URL'),
     anonKey: dotenv.get('SUPABASE_ANON_KEY'),
   );
+
+  // 启动数据库服务
+  await DictionaryService().init();
 
   runApp(const IrisApp());
 }

@@ -1,4 +1,7 @@
+import 'package:Iris/practice/search_result_screen.dart';
 import 'package:flutter/material.dart';
+
+import 'jm/dictionary_service.dart';
 
 class PracticePage extends StatefulWidget {
   const PracticePage({super.key});
@@ -9,6 +12,7 @@ class PracticePage extends StatefulWidget {
 
 class _PracticePageState extends State<PracticePage> {
   final TextEditingController _searchController = TextEditingController();
+  final DictionaryService _dictService = DictionaryService();
 
   @override
   void dispose() {
@@ -49,7 +53,7 @@ class _PracticePageState extends State<PracticePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 搜索栏
-                  _buildSearchBar(colorScheme),
+                  _buildSearchBar(colorScheme, context),
                   const SizedBox(height: 32),
                   
                   _buildSectionTitle(context, '每日修习', Icons.auto_stories),
@@ -89,21 +93,121 @@ class _PracticePageState extends State<PracticePage> {
     );
   }
 
-  Widget _buildSearchBar(ColorScheme colorScheme) {
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceVariant.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: '搜索生词、知识点...',
-          hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7)),
-          prefixIcon: Icon(Icons.search, color: colorScheme.primary),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-        ),
+  // Widget _buildSearchBar(ColorScheme colorScheme, BuildContext context) {
+  //   // 定义一个内部函数，方便复用搜索逻辑
+  //   void _executeSearch() {
+  //     final value = _searchController.text.trim();
+  //     if (value.isNotEmpty) {
+  //       _handleSearch(context, value);
+  //     }
+  //   }
+  //
+  //   return Container(
+  //     decoration: BoxDecoration(
+  //       color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+  //       borderRadius: BorderRadius.circular(20),
+  //     ),
+  //     child: TextField(
+  //       controller: _searchController,
+  //       textInputAction: TextInputAction.search,
+  //       // 1. 响应键盘搜索键
+  //       onSubmitted: (_) => _executeSearch(),
+  //       decoration: InputDecoration(
+  //         hintText: '搜索生词...',
+  //         hintStyle: TextStyle(
+  //           color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+  //         ),
+  //         prefixIcon: Icon(Icons.search, color: colorScheme.primary),
+  //         // 2. 添加右侧搜索按钮
+  //         suffixIcon: IconButton(
+  //           icon: const Icon(Icons.arrow_forward_rounded), // 使用圆角箭头，更有现代感
+  //           color: colorScheme.primary,
+  //           onPressed: _executeSearch, // 点击图标触发搜索
+  //         ),
+  //         border: InputBorder.none,
+  //         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+  //       ),
+  //     ),
+  //   );
+  // }
+
+  Widget _buildSearchBar(ColorScheme colorScheme, BuildContext context) {
+    return SearchAnchor(
+      // 控制器可以帮你获取当前输入的内容
+      searchController: SearchController(),
+      builder: (BuildContext context, SearchController controller) {
+        return SearchBar(
+          controller: controller,
+          padding: const WidgetStatePropertyAll<EdgeInsets>(
+              EdgeInsets.symmetric(horizontal: 16.0)),
+          onTap: () => controller.openView(), // 点击打开联想列表
+          onChanged: (_) => controller.openView(),
+          leading: const Icon(Icons.search),
+          hintText: '搜索生词...',
+          elevation: WidgetStatePropertyAll(0),
+          backgroundColor: WidgetStatePropertyAll(
+              colorScheme.surfaceContainerHighest.withValues(alpha: 0.3)),
+          trailing: [
+            IconButton(
+              icon: const Icon(Icons.arrow_forward_rounded),
+              onPressed: () {
+                if (controller.text.isNotEmpty) {
+                  _handleSearch(context, controller.text);
+                }
+              },
+            )
+          ],
+        );
+      },
+      // 这里是关键：联想列表的构建逻辑
+      suggestionsBuilder: (BuildContext context, SearchController controller) async {
+        final String input = controller.value.text.trim();
+        if (input.isEmpty) return [];
+
+        final List<String> suggestions = await _dictService.getSuggestions(input);
+
+        // 1. 构造一个固定的“搜索当前”组件
+        final List<Widget> listItems = [
+          ListTile(
+            leading: const Icon(Icons.search, color: WaColors.akaRed),
+            title: Text('搜索 "$input"',
+                style: const TextStyle(fontWeight: FontWeight.bold, color: WaColors.akaRed)),
+            onTap: () {
+              controller.closeView(input);
+              _handleSearch(context, input);
+            },
+          ),
+          const Divider(height: 1), // 分割线
+        ];
+
+        // 2. 添加联想出的具体词条
+        if (suggestions.isNotEmpty) {
+          listItems.addAll(suggestions.map((suggestion) => ListTile(
+            leading: const Icon(Icons.history_edu_rounded, size: 18),
+            title: Text(suggestion),
+            onTap: () {
+              controller.text = suggestion;
+              controller.closeView(suggestion);
+              _handleSearch(context, suggestion);
+            },
+          )));
+        } else {
+          listItems.add(
+              const ListTile(title: Text("查无此词，点击强制搜索", style: TextStyle(color: Colors.grey, fontSize: 13)))
+          );
+        }
+
+        return listItems;
+      }
+    );
+  }
+
+  // 跳转逻辑
+  void _handleSearch(BuildContext context, String query) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SearchResultScreen(query: query),
       ),
     );
   }

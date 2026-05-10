@@ -133,6 +133,13 @@ class GemmaSkill {
     );
   }
 
+  /// 日语翻译
+  Stream<String> japaneseTranslate({required String content, String targetLang = "中文"}) {
+    return _generate(
+      prompt: "请将: '$content'翻译成$targetLang。",
+    );
+  }
+
   /// 题目分析
   Stream<String> analyzeProblem({required Uint8List imageBytes, String? additionalContext}) {
     String prompt = "请分析图片中的题目。首先识别题目内容，然后提供详细的解题思路和步骤。请用中文回答。";

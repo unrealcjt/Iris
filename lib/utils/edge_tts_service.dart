@@ -11,8 +11,8 @@ class EdgeTtsService {
   final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
 
   /// 生成语音并播放 (单次直接播放)
-  Future<void> speak(String text, {String? voiceName}) async {
-    final bytes = await getAudioBytes(text, voiceName: voiceName);
+  Future<void> speak(String text, {String? voiceName, rate="+0%", volume="+0%", pitch="+0Hz"}) async {
+    final bytes = await getAudioBytes(text, voiceName: voiceName, rate: rate, volume: volume, pitch: pitch);
     if (bytes != null) {
       await stop(); // 先停止之前的播放
       await _audioPlayer.play(BytesSource(bytes));
@@ -54,14 +54,14 @@ class EdgeTtsService {
   }
 
   /// 仅生成音频字节而不播放
-  Future<Uint8List?> getAudioBytes(String text, {String? voiceName}) async {
+  Future<Uint8List?> getAudioBytes(String text, {String? voiceName, rate="+0%", volume="+0%", pitch="+0Hz"}) async {
     final selectedVoice = voiceName ?? 'zh-CN-XiaoxiaoNeural';
     final communicate = Communicate(
       text: text,
       voice: selectedVoice,
-      rate: "+0%",
-      volume: "+0%",
-      pitch: "+0Hz",
+      rate: rate,
+      volume: volume,
+      pitch: pitch,
     );
 
     List<int> audioBytes = [];

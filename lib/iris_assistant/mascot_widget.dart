@@ -24,6 +24,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
   bool _isModelSelectionOpen = false; // 用于控制模型选择界面的显示
   bool _isLanguageSelectionOpen = false; // 用于控制翻译语言选择界面的显示
   bool _isTextInputOpen = false; // 用于控制翻译文本输入界面的显示
+  bool _isActionMenuOpen = false; // 用于控制功能集菜单的展开
 
   @override
   void initState() {
@@ -68,6 +69,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
       _isModelSelectionOpen = false;
       _isLanguageSelectionOpen = false;
       _isTextInputOpen = false;
+      _isActionMenuOpen = false;
       _translateInputController.clear();
     }
     _wasExpanded = _controller.isExpanded;
@@ -89,12 +91,16 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
     }
 
     if (_talkingController.value.isInitialized) {
-      if (_controller.isTalking) {
-        _talkingController.play();
-      } else {
-        _talkingController.pause();
-        _talkingController.seekTo(Duration.zero);
-      }
+      updatePlayer();
+    }
+  }
+
+  void updatePlayer() {
+    if (_controller.isTalking) {
+      _talkingController.play();
+    } else {
+      _talkingController.pause();
+      _talkingController.seekTo(Duration.zero);
     }
   }
 
@@ -370,18 +376,69 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
       top: 100,
       right: 20,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           _buildQuickAction(Icons.grid_4x4_rounded, "五十音"),
           const SizedBox(height: 12),
-          GestureDetector(
-            onTap: () {
-              if (_controller.helpText.isEmpty) {
-                setState(() => _isTextInputOpen = true);
-              } else {
-                setState(() => _isLanguageSelectionOpen = true);
-              }
-            },
-            child: _buildQuickAction(Icons.translate_rounded, "翻译"),
+          
+          // 功能集：使用 Row 确保所有子项都在 HitTest 区域内
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_isActionMenuOpen)
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutBack,
+                  builder: (context, value, child) {
+                    return Opacity(
+                      opacity: value.clamp(0.0, 1.0),
+                      child: Transform.translate(
+                        offset: Offset(20 * (1 - value), 0),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildSubAction(
+                              icon: Icons.analytics_outlined, 
+                              label: "分析", 
+                              onTap: () => _handleAction(() => _controller.analyzeGrammar()),
+                            ),
+                            const SizedBox(width: 12),
+                            _buildSubAction(
+                              icon: Icons.volume_up_outlined, 
+                              label: "朗读", 
+                              onTap: () => _handleAction(() => _controller.speakHelpText()),
+                            ),
+                            const SizedBox(width: 12),
+                            _buildSubAction(
+                              icon: Icons.translate_rounded, 
+                              label: "翻译", 
+                              onTap: () => _handleAction(() {
+                                if (_controller.helpText.isEmpty) {
+                                  setState(() => _isTextInputOpen = true);
+                                } else {
+                                  setState(() => _isLanguageSelectionOpen = true);
+                                }
+                              }),
+                            ),
+                            const SizedBox(width: 12),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              
+              // 主按钮
+              GestureDetector(
+                onTap: () => setState(() => _isActionMenuOpen = !_isActionMenuOpen),
+                child: _buildQuickAction(
+                  _isActionMenuOpen ? Icons.close : Icons.auto_awesome_motion_rounded, 
+                  _isActionMenuOpen ? "收起" : "快捷",
+                  active: _isActionMenuOpen,
+                ),
+              ),
+            ],
           ),
 
           const SizedBox(height: 12),
@@ -389,6 +446,34 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
         ],
       ),
     );
+  }
+
+  // 子功能按钮组件
+  Widget _buildSubAction({required IconData icon, required String label, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white30),
+            ),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 9)),
+        ],
+      ),
+    );
+  }
+
+  // 统一处理逻辑：如果点击了子功能，自动收起菜单
+  void _handleAction(VoidCallback action) {
+    setState(() => _isActionMenuOpen = false);
+    action();
   }
 
   Widget _buildTextInputOverlay() {
@@ -558,7 +643,13 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
   Widget _buildModeTab(String label, MascotAssistantMode mode) {
     final isSelected = _controller.assistantMode == mode;
     return GestureDetector(
-      onTap: () => _controller.setAssistantMode(mode),
+      onTap: () {
+        if (mode == MascotAssistantMode.assistant) {
+          // 关闭对话
+          _controller.setTalking(false);
+        }
+        _controller.setAssistantMode(mode);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -591,15 +682,15 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
     );
   }
 
-  Widget _buildQuickAction(IconData icon, String label) {
+  Widget _buildQuickAction(IconData icon, String label, {bool active = false}) {
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.black54,
+            color: active ? Colors.pinkAccent.withOpacity(0.5) : Colors.black54,
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white24),
+            border: Border.all(color: active ? Colors.pinkAccent : Colors.white24),
           ),
           child: Icon(icon, color: Colors.white, size: 24),
         ),
@@ -651,19 +742,34 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                   ),
                 ),
               if (_controller.assistantMode == MascotAssistantMode.assistant)
-                Positioned(
-                  right: 16,
-                  child: GestureDetector(
-                    onTap: () {
-                      _controller.refreshAssistText();
-                    },
-                    child: const Icon(
-                      Icons.refresh,
-                      color: Colors.white,
-                      size: 30,
+                if (_controller.isGenerating)
+                  Positioned(
+                    right: 16,
+                    child: GestureDetector(
+                      onTap: () {
+                        _controller.stopSkillReply();
+                      },
+                      child: const Icon(
+                        Icons.stop,
+                        color: Colors.red,
+                        size: 30,
+                      ),
+                    ),
+                  )
+                else
+                  Positioned(
+                    right: 16,
+                    child: GestureDetector(
+                      onTap: () {
+                        _controller.refreshAssistText();
+                      },
+                      child: const Icon(
+                        Icons.refresh,
+                        color: Colors.white,
+                        size: 30,
+                      ),
                     ),
                   ),
-                ),
             ],
           ),
         ),

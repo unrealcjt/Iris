@@ -1,8 +1,11 @@
 import 'package:Iris/custom_component/iris_selection_area.dart';
+import 'package:Iris/iris_assistant/mascot_controller.dart';
 import 'package:Iris/utils/edge_tts_service.dart';
+import 'package:Iris/utils/gemma_skill.dart';
 import 'package:flutter/material.dart';
 import 'package:Iris/jm/dictionary_service.dart';
 import 'package:Iris/jm/models.dart';
+import 'dart:io';
 
 import 'package:Iris/jm/jm_parser.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -21,6 +24,39 @@ class _SearchResultScreenState extends State<SearchResultScreen> {
   String query = "";
   
   final _ttsService = EdgeTtsService();
+  final _gemmaSkill = GemmaSkill();
+  String _exampleSentence = "";
+  bool _isGeneratingExample = false;
+
+  Future<void> _generateExample(String word) async {
+    if (_isGeneratingExample) return;
+
+    setState(() {
+      _isGeneratingExample = true;
+      _exampleSentence = "";
+    });
+
+    try {
+      final modelPath = MascotController().selectedModelPath;
+      if (modelPath == null) {
+        setState(() => _exampleSentence = "请先在 Mascot 设置中选择模型");
+        return;
+      }
+
+      await _gemmaSkill.initialize(modelFile: File(modelPath));
+      final stream = _gemmaSkill.exampleSentenceByWord(word: word);
+      
+      await for (final chunk in stream) {
+        setState(() {
+          _exampleSentence += chunk;
+        });
+      }
+    } catch (e) {
+      setState(() => _exampleSentence = "例句生成失败: $e");
+    } finally {
+      setState(() => _isGeneratingExample = false);
+    }
+  }
 
   void _showKanjiDetail(String char) async {
     final kanji = await _dictService.getKanjiInfo(char);
@@ -276,7 +312,10 @@ class _SearchResultScreenState extends State<SearchResultScreen> {
                                 : null,
                             onTap: () {
                               FocusScope.of(context).unfocus(); // 点击时顺便收起键盘
-                              setState(() => _selectedEntry = entry);
+                              setState(() {
+                                _selectedEntry = entry;
+                                _exampleSentence = ""; // 切换词条时清空例句
+                              });
                             },
                           ),
                         );
@@ -339,6 +378,11 @@ class _SearchResultScreenState extends State<SearchResultScreen> {
                     style: TextStyle(fontSize: 16,
                         color: WaColors.sumiBlack.withOpacity(0.6),
                         letterSpacing: 1.2)),
+
+              const SizedBox(height: 16),
+              
+              // 例句生成按钮及展示
+              _buildExampleSection(entry),
 
               const SizedBox(height: 24),
 
@@ -429,6 +473,47 @@ class _SearchResultScreenState extends State<SearchResultScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildExampleSection(JmEntry entry) {
+    String word = entry.kanji.isNotEmpty ? entry.kanji.first.written : entry.kana.first.written;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        OutlinedButton.icon(
+          onPressed: _isGeneratingExample ? null : () => _generateExample(word),
+          icon: _isGeneratingExample 
+            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.auto_awesome, size: 16),
+          label: const Text('生成 AI 例句'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: WaColors.akaRed,
+            side: const BorderSide(color: WaColors.akaRed),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+        if (_exampleSentence.isNotEmpty || _isGeneratingExample)
+          IrisSelectionArea(
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: WaColors.akaRed.withOpacity(0.1)),
+                ),
+                child: MarkdownBody(
+                  data: _exampleSentence.isEmpty && _isGeneratingExample ? "正在思考例句..." : _exampleSentence,
+                  styleSheet: MarkdownStyleSheet(
+                    p: const TextStyle(fontSize: 14, color: WaColors.sumiBlack, height: 1.5),
+                  ),
+                ),
+              ),
+          )
+      ],
     );
   }
 

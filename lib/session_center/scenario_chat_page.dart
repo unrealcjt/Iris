@@ -441,7 +441,6 @@ $styleInstruction
   }
 
   Future<void> _warnUpInference() async {
-    debugPrint("对话预热！");
     await _chatSession!.addQueryChunk(Message.text(text: "now is ${DateTime.now().millisecondsSinceEpoch}", isUser: true));
     final stream = _chatSession!.generateChatResponseAsync();
     await for (final response in stream) {
@@ -647,10 +646,10 @@ $styleInstruction
 
     if (!mounted) return;
 
-    _analyzeText(userSentences);
+    _analyzeText(userSentences, isCheck: true);
   }
 
-  void _analyzeText(String text) {
+  void _analyzeText(String text, {bool isCheck = false}) {
     if (_currentModelFile == null) return;
     
     showDialog(
@@ -660,6 +659,7 @@ $styleInstruction
         gemmaSkill: _gemmaSkill,
         modelFile: _currentModelFile!,
         textContent: text,
+        isCheck: isCheck,
       ),
     );
   }
@@ -1367,7 +1367,7 @@ $styleInstruction
                 await Future.delayed(const Duration(milliseconds: 100));
                 final data = await Clipboard.getData(Clipboard.kTextPlain);
                 if (data != null && data.text != null && data.text!.isNotEmpty) {
-                  _analyzeText(data.text!);
+                  _analyzeText(data.text!, isCheck: false);
                 }
               },
             ),
@@ -1522,11 +1522,13 @@ class _GrammarAnalysisDialog extends StatefulWidget {
   final GemmaSkill gemmaSkill;
   final File modelFile;
   final String textContent;
+  final isCheck;
 
   const _GrammarAnalysisDialog({
     required this.gemmaSkill,
     required this.modelFile,
     required this.textContent,
+    required this.isCheck,
   });
 
   @override
@@ -1546,14 +1548,19 @@ class _GrammarAnalysisDialogState extends State<_GrammarAnalysisDialog> {
   @override
   void dispose() {
     // 关键：当用户手动关闭、返回或弹窗消失时，强制停止 Gemma 的分析任务并关闭会话
-    widget.gemmaSkill.close();
+    widget.gemmaSkill.stopGenerate();
     super.dispose();
   }
 
   Future<void> _startAnalysis() async {
     try {
       await widget.gemmaSkill.initialize(modelFile: widget.modelFile);
-      final stream = widget.gemmaSkill.analyzeGrammar(textContent: widget.textContent);
+      final stream;
+      if (widget.isCheck) {
+        stream = widget.gemmaSkill.sentenceCheck(textContent: widget.textContent);
+      } else {
+        stream = widget.gemmaSkill.analyzeGrammar(textContent: widget.textContent);
+      }
       
       await for (final response in stream) {
         if (mounted) {

@@ -93,6 +93,8 @@ class MascotController extends ChangeNotifier {
   String _helpText = "";
   String get helpText => _helpText;
 
+  static const String LOADING_TEXT = "稍等一下Iris...✍️(◔◡◔)📄";
+
   InferenceModel? _model;
   InferenceChat? _chat;
 
@@ -209,14 +211,13 @@ class MascotController extends ChangeNotifier {
 
   void activeMascot(String text) {
     resetChat();
-    _closeChatSession();
     // 调出助手界面
     setAssistantMode(MascotAssistantMode.assistant);
     _helpText = text;
     _currentDialogueText = """
 Ciallo～(∠・ω< )⌒☆你选择了这部分内容:\n
 `${text}`\n
-有什么要我帮助你的吗？点击旁边这些小工具我都可以帮你。这些不够的话，可以到聊天模式具体地问Iris哦!
+有什么要我帮助你的吗？点击旁边的快捷工具箱我都可以帮你。这些不够的话，可以到聊天模式具体地问Iris哦!
 """;
     setExpanded(true);
   }
@@ -250,11 +251,17 @@ Ciallo～(∠・ω< )⌒☆你选择了这部分内容:\n
     _ttsService.stop();
   }
 
+  Future<void> setTalking(bool isTalking) async {
+    _isTalking = isTalking;
+    notifyListeners();
+  }
+
+
   Future<void> translate({String targetLang = "中文"}) async {
     if (helpText.isEmpty || _isGenerating) return;
     _isGenerating = true;
     final content = _helpText;
-    _currentDialogueText = "";
+    _currentDialogueText = LOADING_TEXT;
     notifyListeners();
 
     if (_selectedModelPath == null) {
@@ -461,6 +468,55 @@ Ciallo～(∠・ω< )⌒☆你选择了这部分内容:\n
       _isAudioGenerating = false;
       notifyListeners();
     }
+  }
+  
+  Future<void> speakHelpText() async {
+    if (_helpText.isEmpty) return;
+    String voice = 'zh-CN-XiaoxiaoNeural';
+    if (RegExp(r'[ぁ-んァ-ン]').hasMatch(_helpText)) {
+      voice = 'ja-JP-NanamiNeural';
+    }
+    await _ttsService.speak(_helpText, voiceName: voice);
+  }
+
+  Future<void> analyzeGrammar() async {
+    if (helpText.isEmpty || _isGenerating) return;
+    _isGenerating = true;
+    final content = _helpText;
+    _currentDialogueText = LOADING_TEXT;
+    notifyListeners();
+
+    if (_selectedModelPath == null) {
+      _currentDialogueText = "未选择模型";
+      _isGenerating = false;
+      notifyListeners();
+      return;
+    }
+
+    final file = File(_selectedModelPath!);
+    if (file.existsSync()) {
+      await _gemmaSkill.initialize(modelFile: file);
+    }
+    String fullResponse = "";
+    try {
+      final stream = _gemmaSkill.analyzeGrammar(textContent: content);
+      await for (final response in stream) {
+        fullResponse += response;
+        _currentDialogueText = fullResponse;
+        notifyListeners();
+      }
+    } catch(e) {
+      _currentDialogueText = "$e";
+    } finally {
+      _isGenerating = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> stopSkillReply() async {
+    await _gemmaSkill.stopGenerate();
+    _isGenerating = false;
+    notifyListeners();
   }
 
   @override

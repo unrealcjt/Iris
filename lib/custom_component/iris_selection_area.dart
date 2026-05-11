@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import 'package:Iris/iris_assistant/mascot_controller.dart';
@@ -28,8 +27,16 @@ class IrisSelectionArea extends StatelessWidget {
             selectableRegionState.hideToolbar();
             await Future.delayed(const Duration(milliseconds: 100));
             final data = await Clipboard.getData(Clipboard.kTextPlain);
-            if (data != null && data.text != null && data.text!.isNotEmpty) {
-              MascotController().activeMascot(data.text!);
+            final selectedText = data?.text;
+
+            if (selectedText != null && selectedText.isNotEmpty) {
+              // --- 核心修改：触发回调 ---
+              if (onActionSelected != null) {
+                onActionSelected!(selectedText);
+              }
+
+              // 如果你希望使用了回调就不用全局 MascotController，可以把下面这行删掉
+              MascotController().activeMascot(selectedText);
             }
           },
         ));

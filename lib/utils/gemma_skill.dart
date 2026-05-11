@@ -30,6 +30,12 @@ class GemmaSkill {
     );
   }
 
+  Future<void> stopGenerate() async {
+    await _activeSession!.stopGeneration();
+    await _activeSession?.close();
+    _activeSession = null;
+  }
+
   /// 通用流式生成方法
   Stream<String> _generate({
     required String prompt,
@@ -133,13 +139,6 @@ class GemmaSkill {
     );
   }
 
-  /// 日语翻译
-  Stream<String> japaneseTranslate({required String content, String targetLang = "中文"}) {
-    return _generate(
-      prompt: "请将: '$content'翻译成$targetLang。",
-    );
-  }
-
   /// 题目分析
   Stream<String> analyzeProblem({required Uint8List imageBytes, String? additionalContext}) {
     String prompt = "请分析图片中的题目。首先识别题目内容，然后提供详细的解题思路和步骤。请用中文回答。";
@@ -155,17 +154,17 @@ class GemmaSkill {
   // ================= 闻讯 (Audio) =================
 
   /// 发音分析
-  Stream<String> analyzePronunciation({required Uint8List audioBytes}) {
+  Stream<String> analyzePronunciation({required Uint8List audioBytes, required String example}) {
     return _generate(
-      prompt: "请分析这段音频中的发音。识别其中的发音错误、重音偏移或连读问题，并给出改进建议。请用中文回答。",
+      prompt: "请分析这段语音中的发音。对照原句'${example}'识别其中的发音错误、重音偏移或连读问题。请用中文回答。",
       audioBytes: audioBytes,
     );
   }
 
   /// 语气分析
-  Stream<String> analyzeTone({required Uint8List audioBytes}) {
+  Stream<String> analyzeTone({required Uint8List audioBytes, required scenario}) {
     return _generate(
-      prompt: "请分析这段语音的语气和情感状态。判断说话者的情绪（如焦虑、开心、严肃等）以及语气的强弱变化。请用中文回答。",
+      prompt: "1. Recognize the Japanese sentence in audio, and output the Japanese text. 2.Use Chinese to analyze the tone and emotion.",
       audioBytes: audioBytes,
     );
   }
@@ -188,12 +187,67 @@ Task: Analyze the grammar and structure of the provided dialogue sentences.
 Dialogue:
 $textContent
 
-Constraint: 
-1. Provide a clear, structured analysis.
+Output format (Chinese rely): 
+1. The translation to Chinese.
 2. Identify key grammar points, sentence structures, and possible errors.
-3. Use Chinese to reply.
 """;
     return _generate(prompt: prompt);
+  }
+
+  /// 语法分析
+  Stream<String> sentenceCheck({required String textContent}) {
+    final prompt = """
+Role: You are a professional linguist and grammar expert.
+Task: Check the grammar of the provided dialogue sentences.
+Dialogue:
+$textContent
+
+Output format (Chinese reply): 
+1. 正确 or 错误.
+2. Please give reasons if the sentence is error.
+""";
+    return _generate(prompt: prompt);
+  }
+
+  /// 日语翻译
+  Stream<String> japaneseTranslate({required String content, String targetLang = "中文"}) {
+    return _generate(
+      prompt: "请将: '$content'翻译成$targetLang。",
+    );
+  }
+
+  /// 生词解析
+  Stream<String> vocabularyAnalyze({required String content}) {
+    return _generate(
+      prompt: "请解析: '$content'这个日语生词，包括词性、读音、用法和例句",
+    );
+  }
+
+  /// 随机句子
+  Stream<String> exampleSentence() {
+    return _generate(
+      prompt: "Give me a concise Japanese example sentence. just reply the sentence. now is ${DateTime.now().millisecondsSinceEpoch}",
+    );
+  }
+
+  /// 随机句子
+  Stream<String> exampleSentenceByWord({required String word}) {
+    return _generate(
+      prompt: "使用'${word}'生成一句日语例句. now is ${DateTime.now().millisecondsSinceEpoch}",
+    );
+  }
+
+  Stream<String> scenarioAsk() {
+    return _generate(
+      prompt: """
+随机生成一个日常场景，分配两个角色，其中一个角色发出一句符合场景的日语询问。Now is ${DateTime.now()}。
+输出格式:
+场景: 场景设定。
+Ai: Ai的角色(例如小王)。
+你: 给用户分配的角色。
+小王询问: 询问内容，使用日语。
+""",
+    );
   }
   
   /// 通用文本对话

@@ -1,6 +1,9 @@
 import 'package:Iris/perception/analyze_problem_page.dart';
+import 'package:Iris/perception/pronunciation_analysis_page.dart';
 import 'package:Iris/perception/recognizeObject_page.dart';
 import 'package:Iris/perception/scene_description_page.dart';
+import 'package:Iris/perception/speech_translation_page.dart';
+import 'package:Iris/perception/tone_analysis_page.dart';
 import 'package:Iris/perception/translate_lines_page.dart';
 import 'package:flutter/material.dart';
 import 'perception/text_extraction_page.dart';
@@ -141,21 +144,36 @@ class _PerceptionPageState extends State<PerceptionPage> with SingleTickerProvid
           title: '发音分析',
           subtitle: '纠正口语发音',
           color: Colors.teal,
-          onTap: () {},
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const PronunciationAnalysisPage()),
+            );
+          },
         ),
         _buildModuleCard(
           icon: Icons.sentiment_satisfied_rounded,
           title: '语气分析',
           subtitle: '洞察情感波动',
           color: Colors.pink,
-          onTap: () {},
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ToneAnalysisPage()),
+            );
+          },
         ),
         _buildModuleCard(
           icon: Icons.g_translate_rounded,
           title: '语音翻译',
           subtitle: '实时同声传译',
           color: Colors.indigo,
-          onTap: () {},
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SpeechTranslationPage()),
+            );
+          },
         ),
       ],
     );

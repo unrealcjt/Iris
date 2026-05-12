@@ -41,8 +41,9 @@ class GemmaSkill {
     required String prompt,
     Uint8List? imageBytes,
     Uint8List? audioBytes,
-    double temperature = 0.8,
-    int topK = 40,
+    double temperature = 1.0,
+    int topK = 64,
+    double topP = 0.95
   }) async* {
     if (_currentModel == null) {
       yield "错误：模型未初始化";
@@ -52,6 +53,7 @@ class GemmaSkill {
     _activeSession = await _currentModel!.createSession(
       temperature: temperature,
       topK: topK,
+      topP: topP,
       enableVisionModality: imageBytes != null,
       enableAudioModality: audioBytes != null,
       systemInstruction: "严格按照用户提示词给出的格式输出，禁止格式外的问候语"
@@ -141,9 +143,12 @@ class GemmaSkill {
 
   /// 题目分析
   Stream<String> analyzeProblem({required Uint8List imageBytes, String? additionalContext}) {
-    String prompt = "请分析图片中的题目。首先识别题目内容，然后提供详细的解题思路和步骤。请用中文回答。";
+    String prompt = """
+Recognize the content of Japanese problem in the following image, then provide the problem-solving strategies and steps.
+when formatting the answer, first output the answer of problem, then one newline, then output the string '分析: ', then the strategies and steps in Chinese.
+""";
     if (additionalContext != null && additionalContext.isNotEmpty) {
-      prompt = "补充背景：$additionalContext\n\n$prompt";
+      prompt = "$prompt\n\nAddition information of problem：$additionalContext\n\n";
     }
     return _generate(
       prompt: prompt,
@@ -156,7 +161,27 @@ class GemmaSkill {
   /// 发音分析
   Stream<String> analyzePronunciation({required Uint8List audioBytes, required String example}) {
     return _generate(
-      prompt: "请分析这段语音中的发音。对照原句'${example}'识别其中的发音错误、重音偏移或连读问题。请用中文回答。",
+      prompt: """
+You are an expert Japanese language tutor. Compare the provided speech segment with the reference sentence provided below.
+
+Reference Sentence: "${example}"
+
+Task:
+1. Transcribe the user's speech in Japanese.
+2. Compare the transcription and the phonetic performance with the Reference Sentence.
+3. Analyze pronunciation issues, focusing on:
+    - Pitch Accent (High/Low patterns)
+    - Rhythm (Long vowels, sokuon/促音, and n/拨音)
+    - Specific Phonemes (e.g., 'r' sound, devocalization of vowels)
+
+Formatting:
+- Transcription: [Output the transcribed Japanese text]
+- Analysis: 
+    - Accuracy: [Did the user say the correct words?]
+    - Pronunciation: [Specific feedback on accent and rhythm]
+- Advice: [How to improve]
+Output in Chinese.
+""",
       audioBytes: audioBytes,
     );
   }
@@ -164,15 +189,24 @@ class GemmaSkill {
   /// 语气分析
   Stream<String> analyzeTone({required Uint8List audioBytes, required scenario}) {
     return _generate(
-      prompt: "1. Recognize the Japanese sentence in audio, and output the Japanese text. 2.Use Chinese to analyze the tone and emotion.",
+      prompt: """
+Transcribe the following speech segment in Japanese, then analyze the tone and emotion.
+When formatting the answer, first output the transcription in Japanese, then one newline, then output the string '分析: ', then the analyzation in Chinese.
+""",
       audioBytes: audioBytes,
     );
   }
 
   /// 语音翻译
-  Stream<String> translateSpeech({required Uint8List audioBytes, String targetLang = "中文"}) {
+  Stream<String> translateSpeech(
+      {required Uint8List audioBytes,
+        String sourceLang = "Japanese",
+        String targetLang = "Chinese"}) {
     return _generate(
-      prompt: "请将这段语音的内容翻译成$targetLang。只需输出翻译后的文本。",
+      prompt: """
+Transcribe the following speech segment in ${sourceLang}, then translate it into ${targetLang}.
+When formatting the answer, first output the transcription in ${sourceLang}, then one newline, then output the string '${targetLang}: ', then the translation in ${targetLang}.
+""",
       audioBytes: audioBytes,
     );
   }
@@ -208,11 +242,13 @@ Output format (Chinese reply):
 """;
     return _generate(prompt: prompt);
   }
-
   /// 日语翻译
   Stream<String> japaneseTranslate({required String content, String targetLang = "中文"}) {
     return _generate(
-      prompt: "请将: '$content'翻译成$targetLang。",
+      prompt: """
+Translate the '$content' into $targetLang.
+When formatting the answer, output the the translation only.
+"""
     );
   }
 

@@ -1,5 +1,7 @@
 import 'package:Iris/practice/search_result_screen.dart';
+import 'package:Iris/practice/vocabulary_list_page.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'jm/dictionary_service.dart';
 
@@ -13,6 +15,28 @@ class PracticePage extends StatefulWidget {
 class _PracticePageState extends State<PracticePage> {
   final TextEditingController _searchController = TextEditingController();
   final DictionaryService _dictService = DictionaryService();
+  bool _isBookCreated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBookStatus();
+  }
+
+  Future<void> _checkBookStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isBookCreated = prefs.getBool('isVocabularyBookCreated') ?? false;
+    });
+  }
+
+  Future<void> _createBook() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isVocabularyBookCreated', true);
+    setState(() {
+      _isBookCreated = true;
+    });
+  }
 
   @override
   void dispose() {
@@ -60,16 +84,22 @@ class _PracticePageState extends State<PracticePage> {
                   const SizedBox(height: 16),
                   
                   // 生词修习
-                  _buildModuleCard(
-                    context: context,
-                    title: '生词修习',
-                    subtitle: '温故而知新，夯实词汇基础',
-                    icon: Icons.menu_book_rounded,
-                    color: Colors.blueAccent,
-                    onTap: () {
-                      // TODO: 实现跳转
-                    },
-                  ),
+                  if (!_isBookCreated)
+                    _buildCreateBookCard(context)
+                  else
+                    _buildModuleCard(
+                      context: context,
+                      title: '生词修习',
+                      subtitle: '温故而知新，夯实词汇基础',
+                      icon: Icons.menu_book_rounded,
+                      color: Colors.blueAccent,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const VocabularyListPage()),
+                        );
+                      },
+                    ),
                   const SizedBox(height: 16),
                   
                   // 试炼
@@ -92,44 +122,6 @@ class _PracticePageState extends State<PracticePage> {
       ),
     );
   }
-
-  // Widget _buildSearchBar(ColorScheme colorScheme, BuildContext context) {
-  //   // 定义一个内部函数，方便复用搜索逻辑
-  //   void _executeSearch() {
-  //     final value = _searchController.text.trim();
-  //     if (value.isNotEmpty) {
-  //       _handleSearch(context, value);
-  //     }
-  //   }
-  //
-  //   return Container(
-  //     decoration: BoxDecoration(
-  //       color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-  //       borderRadius: BorderRadius.circular(20),
-  //     ),
-  //     child: TextField(
-  //       controller: _searchController,
-  //       textInputAction: TextInputAction.search,
-  //       // 1. 响应键盘搜索键
-  //       onSubmitted: (_) => _executeSearch(),
-  //       decoration: InputDecoration(
-  //         hintText: '搜索生词...',
-  //         hintStyle: TextStyle(
-  //           color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-  //         ),
-  //         prefixIcon: Icon(Icons.search, color: colorScheme.primary),
-  //         // 2. 添加右侧搜索按钮
-  //         suffixIcon: IconButton(
-  //           icon: const Icon(Icons.arrow_forward_rounded), // 使用圆角箭头，更有现代感
-  //           color: colorScheme.primary,
-  //           onPressed: _executeSearch, // 点击图标触发搜索
-  //         ),
-  //         border: InputBorder.none,
-  //         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-  //       ),
-  //     ),
-  //   );
-  // }
 
   Widget _buildSearchBar(ColorScheme colorScheme, BuildContext context) {
     return SearchAnchor(
@@ -208,6 +200,47 @@ class _PracticePageState extends State<PracticePage> {
       context,
       MaterialPageRoute(
         builder: (context) => SearchResultScreen(query: query),
+      ),
+    );
+  }
+
+  Widget _buildCreateBookCard(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.library_add_rounded, size: 48, color: Colors.blueAccent),
+          const SizedBox(height: 16),
+          const Text(
+            '尚未创建生词本',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '创建一个日语生词本，开始你的语言修行之旅',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Colors.grey),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _createBook,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+            ),
+            child: const Text('立即创建'),
+          ),
+        ],
       ),
     );
   }

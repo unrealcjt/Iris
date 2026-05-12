@@ -9,6 +9,8 @@ import 'dart:io';
 
 import 'package:Iris/jm/jm_parser.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'vocabulary_service.dart';
+import 'vocabulary_model.dart';
 
 class SearchResultScreen extends StatefulWidget {
   final String query;
@@ -20,7 +22,9 @@ class SearchResultScreen extends StatefulWidget {
 
 class _SearchResultScreenState extends State<SearchResultScreen> {
   final DictionaryService _dictService = DictionaryService();
+  final VocabularyService _vocabService = VocabularyService();
   JmEntry? _selectedEntry; // 记录当前点击的单词
+  bool _isCollected = false;
   String query = "";
   
   final _ttsService = EdgeTtsService();
@@ -310,11 +314,13 @@ class _SearchResultScreenState extends State<SearchResultScreen> {
                               ),
                             )
                                 : null,
-                            onTap: () {
+                            onTap: () async {
                               FocusScope.of(context).unfocus(); // 点击时顺便收起键盘
+                              final isCollected = await _vocabService.isCollected(entry.entSeq);
                               setState(() {
                                 _selectedEntry = entry;
                                 _exampleSentence = ""; // 切换词条时清空例句
+                                _isCollected = isCollected;
                               });
                             },
                           ),
@@ -564,9 +570,97 @@ class _SearchResultScreenState extends State<SearchResultScreen> {
             padding: const EdgeInsets.all(8),
           ),
         ),
+
+        // 收藏按钮
+        IconButton(
+          onPressed: () => _toggleCollection(entry),
+          icon: Icon(_isCollected ? Icons.star : Icons.star_border),
+          color: _isCollected ? Colors.orange : Colors.grey,
+          iconSize: 28,
+          tooltip: _isCollected ? "取消收藏" : "收藏",
+          style: IconButton.styleFrom(
+            backgroundColor: (_isCollected ? Colors.orange : Colors.grey).withOpacity(0.1),
+            padding: const EdgeInsets.all(8),
+          ),
+        )
       ],
     );
   }
+
+  void _toggleCollection(JmEntry entry) async {
+    if (_isCollected) {
+      await _vocabService.removeEntry(entry.entSeq);
+      setState(() {
+        _isCollected = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已从生词本移除')));
+      }
+    } else {
+      _showAddVocabularyDialog(entry);
+    }
+  }
+
+  void _showAddVocabularyDialog(JmEntry entry) {
+    final TextEditingController noteController = TextEditingController();
+    final String word = entry.kanji.isNotEmpty ? entry.kanji.first.written : entry.kana.first.written;
+    final String kana = entry.kana.first.written;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('添加到生词本'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('单词: $word', style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text('读音: $kana'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: noteController,
+                decoration: const InputDecoration(
+                  labelText: '备注 (可选)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final newEntry = VocabularyEntry(
+                  entSeq: entry.entSeq,
+                  word: word,
+                  kana: kana,
+                  addTime: DateTime.now(),
+                  reviewTime: DateTime.now().add(const Duration(days: 1)),
+                  note: noteController.text.trim(),
+                );
+                await _vocabService.addEntry(newEntry);
+                if (mounted) {
+                  setState(() {
+                    _isCollected = true;
+                  });
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已添加到生词本')));
+                }
+              },
+              child: const Text('添加'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
 }
 
 // 和风配色常量

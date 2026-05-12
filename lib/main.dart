@@ -10,6 +10,7 @@ import 'practice_page.dart';
 import 'iris_assistant/mascot_widget.dart';
 import 'iris_assistant/mascot_controller.dart';
 import 'jm/dictionary_service.dart';
+import 'practice/vocabulary_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,7 @@ void main() async {
 
   // 启动数据库服务
   await DictionaryService().init();
+  await VocabularyService().init();
 
   runApp(const IrisApp());
 }

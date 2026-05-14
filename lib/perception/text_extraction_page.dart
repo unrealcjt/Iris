@@ -21,7 +21,7 @@ class _TextExtractionPageState extends VisionBaseState<TextExtractionPage> {
   }
 
   Future<void> _startExtraction() async {
-    if (imageBytes == null || currentModelFile == null) return;
+    if (imageBytes == null) return;
 
     setState(() {
       visionState = VisionState.processing;
@@ -30,7 +30,6 @@ class _TextExtractionPageState extends VisionBaseState<TextExtractionPage> {
 
     try {
       await _gemmaSkill.initialize(
-        modelFile: currentModelFile!,
         enableVision: true,
       );
 
@@ -60,12 +59,6 @@ class _TextExtractionPageState extends VisionBaseState<TextExtractionPage> {
       appBar: AppBar(
         title: const Text('文字提取', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: showModelPicker,
-          )
-        ],
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),

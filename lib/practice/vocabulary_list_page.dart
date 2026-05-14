@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'vocabulary_service.dart';
 import 'vocabulary_model.dart';
 import 'package:intl/intl.dart';
+import 'word_detail_page.dart';
+import 'vocabulary_flashcard_page.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+
+import 'package:shared_preferences/shared_preferences.dart';
 
 class VocabularyListPage extends StatefulWidget {
   const VocabularyListPage({super.key});
@@ -14,20 +20,163 @@ class _VocabularyListPageState extends State<VocabularyListPage> {
   final VocabularyService _vocabService = VocabularyService();
   List<VocabularyEntry> _entries = [];
   bool _isLoading = true;
+  int _newWordsLimit = 10;
 
   @override
   void initState() {
     super.initState();
+    _loadSettings();
     _loadEntries();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _newWordsLimit = prefs.getInt('newWordsLimit') ?? 10;
+    });
+  }
+
+  Future<void> _saveSettings(int limit) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('newWordsLimit', limit);
+    setState(() {
+      _newWordsLimit = limit;
+    });
   }
 
   Future<void> _loadEntries() async {
     setState(() => _isLoading = true);
+    await _vocabService.init();
     final entries = await _vocabService.getAllEntries();
     setState(() {
       _entries = entries;
       _isLoading = false;
     });
+  }
+
+  Future<void> _resetProgress() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('重置进度'),
+        content: const Text('确定要重置所有单词的复习进度吗？这将把所有单词设为“从未学习”。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确定', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _vocabService.resetAllProgress();
+      _loadEntries();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('复习进度已重置')));
+      }
+    }
+  }
+
+  Future<void> _exportDatabase() async {
+    try {
+      final dbPath = await _vocabService.getDatabasePath();
+      final dbFile = File(dbPath);
+      
+      Directory? exportDir;
+      if (Platform.isAndroid) {
+        exportDir = Directory('/storage/emulated/0/Download');
+        if (!await exportDir.exists()) {
+          exportDir = await getExternalStorageDirectory();
+        }
+      } else {
+        exportDir = await getDownloadsDirectory();
+      }
+
+      if (exportDir == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('无法获取导出目录')));
+        }
+        return;
+      }
+
+      final fileName = "vocabulary_export_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.sqlite";
+      final exportPath = "${exportDir.path}/$fileName";
+      await dbFile.copy(exportPath);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已导出到: $exportPath')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('导出失败: $e')));
+      }
+    }
+  }
+
+  Future<void> _startReview() async {
+    final dueEntries = await _vocabService.getDueEntries();
+    final newEntries = await _vocabService.getNewEntries(_newWordsLimit);
+    
+    final allEntries = [...dueEntries, ...newEntries];
+
+    if (allEntries.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('暂无需要复习或学习的生词')));
+      }
+      return;
+    }
+    
+    if (mounted) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => VocabularyFlashcardPage(entries: allEntries)),
+      );
+      _loadEntries();
+    }
+  }
+
+  void _showSettingsDialog() {
+    int tempLimit = _newWordsLimit;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('背词设置'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('每日新词最大数量:'),
+            const SizedBox(height: 8),
+            StatefulBuilder(
+              builder: (context, setDialogState) => Column(
+                children: [
+                  Slider(
+                    value: tempLimit.toDouble(),
+                    min: 5,
+                    max: 50,
+                    divisions: 9,
+                    label: tempLimit.toString(),
+                    onChanged: (v) => setDialogState(() => tempLimit = v.toInt()),
+                  ),
+                  Text('$tempLimit 个', style: const TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          ElevatedButton(
+            onPressed: () {
+              _saveSettings(tempLimit);
+              Navigator.pop(context);
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -37,6 +186,21 @@ class _VocabularyListPageState extends State<VocabularyListPage> {
         title: const Text('生词本'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: '背词设置',
+            onPressed: _showSettingsDialog,
+          ),
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: '重置所有进度',
+            onPressed: _resetProgress,
+          ),
+          IconButton(
+            icon: const Icon(Icons.import_export),
+            tooltip: '导出数据库',
+            onPressed: _exportDatabase,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadEntries,
           ),
@@ -44,42 +208,81 @@ class _VocabularyListPageState extends State<VocabularyListPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _entries.isEmpty
-              ? _buildEmptyState()
-              : ListView.builder(
-                  itemCount: _entries.length,
-                  itemBuilder: (context, index) {
-                    final entry = _entries[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: ListTile(
-                        title: Text(entry.word, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(entry.kana),
-                            if (entry.note != null && entry.note!.isNotEmpty)
-                              Text('备注: ${entry.note}', style: const TextStyle(fontStyle: FontStyle.italic)),
-                            Text(
-                              '添加于: ${DateFormat('yyyy-MM-dd HH:mm').format(entry.addTime)}',
-                              style: const TextStyle(fontSize: 10, color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
-                          onPressed: () async {
-                            await _vocabService.removeEntry(entry.entSeq);
-                            _loadEntries();
+          : Column(
+              children: [
+                if (_entries.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: ElevatedButton.icon(
+                      onPressed: _startReview,
+                      icon: const Icon(Icons.play_arrow),
+                      label: Text('开始背词试炼 (${_newWordsLimit}新词+复习)'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+// ... rest of the ListView.builder remains same ...
+                Expanded(
+                  child: _entries.isEmpty
+                      ? _buildEmptyState()
+                      : ListView.builder(
+                          itemCount: _entries.length,
+                          itemBuilder: (context, index) {
+                            final entry = _entries[index];
+                            return Card(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              child: ListTile(
+                                title: Text(entry.word, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(entry.kana),
+                                    if (entry.note != null && entry.note!.isNotEmpty)
+                                      Text('备注: ${entry.note}', style: const TextStyle(fontStyle: FontStyle.italic)),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          '熟练度: ${entry.familiarity}',
+                                          style: TextStyle(fontSize: 12, color: Colors.blueGrey[700]),
+                                        ),
+                                        Text(
+                                          '添加于: ${DateFormat('yyyy-MM-dd HH:mm').format(entry.addTime)}',
+                                          style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                  onPressed: () async {
+                                    await _vocabService.removeEntry(entry.entSeq);
+                                    _loadEntries();
+                                  },
+                                ),
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => WordDetailPage(
+                                        entSeq: entry.entSeq,
+                                        initialWord: entry.word,
+                                        initialKana: entry.kana,
+                                      ),
+                                    ),
+                                  );
+                                  _loadEntries();
+                                },
+                              ),
+                            );
                           },
                         ),
-                        onTap: () {
-                          // TODO: 跳转到详情
-                        },
-                      ),
-                    );
-                  },
                 ),
+              ],
+            ),
     );
   }
 

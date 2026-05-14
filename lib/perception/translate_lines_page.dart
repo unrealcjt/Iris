@@ -22,7 +22,7 @@ class _TranslateLinesPageState extends VisionBaseState<TranslateLinesPage> {
   }
 
   Future<void> _startTranslation() async {
-    if (imageBytes == null || currentModelFile == null) return;
+    if (imageBytes == null) return;
 
     setState(() {
       visionState = VisionState.processing;
@@ -31,7 +31,6 @@ class _TranslateLinesPageState extends VisionBaseState<TranslateLinesPage> {
 
     try {
       await _gemmaSkill.initialize(
-        modelFile: currentModelFile!,
         enableVision: true,
       );
 
@@ -71,12 +70,6 @@ class _TranslateLinesPageState extends VisionBaseState<TranslateLinesPage> {
       appBar: AppBar(
         title: const Text('台词翻译', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: showModelPicker,
-          )
-        ],
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),

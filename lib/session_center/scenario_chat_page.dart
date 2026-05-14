@@ -66,9 +66,6 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
-  List<File> _availableModels = [];
-  File? _currentModelFile;
-  InferenceModel? _currentModel;
   InferenceChat? _chatSession;
   bool _isLoadingModel = false;
   String _loadingStatus = "";
@@ -164,7 +161,6 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
     final String? presetsJson = prefs.getString('scenario_presets');
     final String? savedLang = prefs.getString('scenario_language');
     final String? savedVoice = prefs.getString('scenario_voice');
-    final String? savedModelPath = prefs.getString('scenario_chat_model');
 
     if (presetsJson != null) {
       final List<dynamic> decoded = jsonDecode(presetsJson);
@@ -181,14 +177,6 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
       setState(() {
         _selectedVoice = savedVoice;
       });
-    }
-    if (savedModelPath != null) {
-      final file = File(savedModelPath);
-      if (file.existsSync()) {
-        setState(() {
-          _currentModelFile = file;
-        });
-      }
     }
   }
 
@@ -212,11 +200,6 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
     }
   }
 
-  Future<void> _saveModelPath(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('scenario_chat_model', path);
-  }
-
   @override
   void dispose() {
     // 强制截断正在生成的流并关闭会话
@@ -229,7 +212,7 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
     super.dispose();
   }
 
-  /// 强制停止并关闭所有会话，释放 Native 资源
+  /// 强制停止并关闭当前会话
   Future<void> close() async {
     try {
       if (_chatSession != null) {
@@ -237,12 +220,8 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
         await _chatSession!.close();
         _chatSession = null;
       }
-      if (_currentModel != null) {
-        await _currentModel!.close();
-        _currentModel = null;
-      }
     } catch (e) {
-      debugPrint("GemmaSkill 关闭失败: $e");
+      debugPrint("ScenarioChatPage 关闭失败: $e");
     }
   }
 
@@ -287,17 +266,14 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
 
   Future<void> _initChat() async {
     _fetchVoices();
-    await _loadModelFiles();
-    await _loadPresets(); // 确保加载了保存的模型路径
+    await _loadPresets();
+    
+    if (MascotController().model == null) {
+      await MascotController().init();
+    }
 
-    if (_currentModelFile != null && _currentModelFile!.existsSync()) {
-      _loadModel(_currentModelFile!);
-    } else if (_availableModels.isNotEmpty) {
-      final e2bModel = _availableModels.firstWhere(
-        (f) => f.path.toLowerCase().contains('e2b'),
-        orElse: () => _availableModels.first,
-      );
-      _loadModel(e2bModel);
+    if (MascotController().model != null) {
+      _loadSession();
     } else {
       setState(() {
         _loadingStatus = "未找到可用模型，请先在模型设置中添加 .litertlm 文件";
@@ -316,28 +292,12 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
     }
   }
 
-  Future<void> _loadModelFiles() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final modelDir = Directory(p.join(directory.path, 'models'));
-    if (await modelDir.exists()) {
-      _availableModels = modelDir
-          .listSync()
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.litertlm'))
-          .toList();
-    }
-  }
-
-  Future<void> _loadModel(File modelFile) async {
+  Future<void> _loadSession() async {
     if (_isGenerating) return;
     
-    // 关键：在开启新会话前，强制结束 Mascot 悬浮球的会话和加载状态
-    MascotController().resetChat();
-
     setState(() {
       _isLoadingModel = true;
-      _currentModelFile = modelFile;
-      _loadingStatus = modelFile.path.toLowerCase().contains("e2b") ? "正在初始化角色设定...\n稍等一下，正在预热" : "正在初始化预热......\n更大的模型会更耗时";
+      _loadingStatus = "正在初始化角色设定...\n稍等一下，正在预热";
     });
     MascotController().setVisible(false);
 
@@ -348,18 +308,8 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
         _chatSession = null;
       }
 
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      await FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-          .fromFile(modelFile.path)
-          .install();
-      
-      final model = await FlutterGemma.getActiveModel(
-        maxTokens: 4096,
-        preferredBackend: PreferredBackend.cpu,
-      );
-
-      _currentModel = model;
+      final model = MascotController().model;
+      if (model == null) throw Exception("Model not loaded");
       
       // 构建 System Instruction
       String detailInstruction = _showDetails
@@ -397,9 +347,9 @@ $styleInstruction
 
       final session = await model.createChat(
         systemInstruction: systemPrompt,
-        temperature: 0.95,
-        topK: 30,
-        topP: 0.9,
+        temperature: 1.0,
+        topK: 64,
+        topP: 0.95,
         randomSeed: DateTime.now().millisecondsSinceEpoch,
       );
 
@@ -418,7 +368,6 @@ $styleInstruction
         _ttsQueue.clear();
         _activeTtsTasks.clear();
       });
-      MascotController().setVisible(false);
     } catch (e) {
       debugPrint("场景会话初始化失败: $e");
       setState(() {
@@ -606,7 +555,7 @@ $styleInstruction
   }
 
   Future<void> _handleEndAndAnalyze() async {
-    if (_messages.isEmpty || _currentModelFile == null) return;
+    if (_messages.isEmpty) return;
 
     // 增加二次确认，防止误触
     final bool confirm = await showDialog<bool>(
@@ -650,14 +599,11 @@ $styleInstruction
   }
 
   void _analyzeText(String text, {bool isCheck = false}) {
-    if (_currentModelFile == null) return;
-    
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => _GrammarAnalysisDialog(
         gemmaSkill: _gemmaSkill,
-        modelFile: _currentModelFile!,
         textContent: text,
         isCheck: isCheck,
       ),
@@ -712,7 +658,6 @@ $styleInstruction
     String? tempVoice = _selectedVoice;
     bool tempShowDetails = _showDetails;
     bool tempIsFormal = _isFormal;
-    File? tempModelFile = _currentModelFile;
 
     String getLocalePrefix(String lang) {
       if (lang == "English") return "en-";
@@ -740,16 +685,6 @@ $styleInstruction
             // 如果切换语言后当前选中的语音不在过滤列表中，则重置 tempVoice
             if (tempVoice != null && !filteredVoices.any((v) => v.shortName == tempVoice)) {
               tempVoice = null;
-            }
-
-            // 确保 tempModelFile 指向 _availableModels 中的同一个实例，或者直接通过路径匹配
-            File? selectedModel;
-            try {
-              selectedModel = _availableModels.firstWhere(
-                (f) => f.path == tempModelFile?.path,
-              );
-            } catch (_) {
-              selectedModel = _availableModels.isNotEmpty ? _availableModels.first : null;
             }
 
             return SingleChildScrollView(
@@ -799,19 +734,6 @@ $styleInstruction
                     ],
                   ),
                   const SizedBox(height: 20),
-                  DropdownButtonFormField<File>(
-                    value: selectedModel,
-                    decoration: const InputDecoration(
-                      labelText: "选择模型",
-                      border: OutlineInputBorder(),
-                    ),
-                    items: _availableModels.map((file) => DropdownMenuItem(
-                      value: file,
-                      child: Text(p.basename(file.path), style: const TextStyle(fontSize: 14)),
-                    )).toList(),
-                    onChanged: (val) => setModalState(() => tempModelFile = val),
-                  ),
-                  const SizedBox(height: 16),
                   TextField(
                     controller: scenarioController,
                     maxLines: 5,
@@ -1024,11 +946,8 @@ $styleInstruction
                         });
                         _saveLanguage(tempLanguage);
                         _saveVoice(tempVoice);
-                        if (tempModelFile != null) {
-                          _saveModelPath(tempModelFile!.path);
-                        }
                         Navigator.pop(context);
-                        if (tempModelFile != null) _loadModel(tempModelFile!);
+                        _loadSession();
                       },
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1520,13 +1439,11 @@ $styleInstruction
 
 class _GrammarAnalysisDialog extends StatefulWidget {
   final GemmaSkill gemmaSkill;
-  final File modelFile;
   final String textContent;
   final isCheck;
 
   const _GrammarAnalysisDialog({
     required this.gemmaSkill,
-    required this.modelFile,
     required this.textContent,
     required this.isCheck,
   });
@@ -1554,7 +1471,7 @@ class _GrammarAnalysisDialogState extends State<_GrammarAnalysisDialog> {
 
   Future<void> _startAnalysis() async {
     try {
-      await widget.gemmaSkill.initialize(modelFile: widget.modelFile);
+      await widget.gemmaSkill.initialize();
       final stream;
       if (widget.isCheck) {
         stream = widget.gemmaSkill.sentenceCheck(textContent: widget.textContent);

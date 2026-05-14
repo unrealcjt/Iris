@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:Iris/iris_assistant/mascot_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -13,11 +14,10 @@ class ModelSettingsPage extends StatefulWidget {
 }
 
 class _ModelSettingsPageState extends State<ModelSettingsPage> {
-  List<File> _models = [];
   bool _isImporting = false;
   
   // Try Now state
-  File? _selectedModelForTest;
+  String? _selectedModelPathForTest;
   String _generatedResponse = "";
   bool _isGenerating = false;
   final TextEditingController _questionController = TextEditingController();
@@ -25,34 +25,32 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
   @override
   void initState() {
     super.initState();
+    MascotController().addListener(_onMascotChanged);
     _loadModels();
   }
 
   @override
   void dispose() {
+    MascotController().removeListener(_onMascotChanged);
     _questionController.dispose();
     super.dispose();
   }
 
+  void _onMascotChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _loadModels() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final modelDir = Directory(p.join(directory.path, 'models'));
-    if (!await modelDir.exists()) {
-      await modelDir.create(recursive: true);
-    }
-
-    final files = modelDir
-        .listSync()
-        .whereType<File>()
-        .where((file) => file.path.endsWith('.litertlm'))
-        .toList();
-
-    setState(() {
-      _models = files;
-      if (_models.isNotEmpty && _selectedModelForTest == null) {
-        _selectedModelForTest = _models.first;
+    await MascotController().init();
+    if (MascotController().availableModels.isNotEmpty) {
+      bool stillExists = MascotController().availableModels.any((f) => f.path == _selectedModelPathForTest);
+      if (_selectedModelPathForTest == null || !stillExists) {
+        _selectedModelPathForTest = MascotController().availableModels.first.path;
       }
-    });
+    } else {
+      _selectedModelPathForTest = null;
+    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _importModel() async {
@@ -75,10 +73,25 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
 
         final sourceFile = File(filePath);
         final directory = await getApplicationDocumentsDirectory();
+        final modelDir = Directory(p.join(directory.path, 'models'));
+        if (!await modelDir.exists()) {
+          await modelDir.create(recursive: true);
+        }
+        
         final fileName = p.basename(filePath);
-        final targetPath = p.join(directory.path, 'models', fileName);
+        final targetPath = p.join(modelDir.path, fileName);
 
+        // 1. 复制到 App 私有模型库
         await sourceFile.copy(targetPath);
+        
+        // 2. 【关键】删除 FilePicker 产生的临时缓存副本，释放数 GB 空间
+        try {
+          if (filePath.contains('cache') || filePath.contains('tmp')) {
+            await sourceFile.delete();
+          }
+        } catch (e) {
+          debugPrint("清理临时文件失败: $e");
+        }
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -101,8 +114,8 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
   Future<void> _deleteModel(File file) async {
     try {
       await file.delete();
-      if (_selectedModelForTest?.path == file.path) {
-        _selectedModelForTest = null;
+      if (_selectedModelPathForTest == file.path) {
+        _selectedModelPathForTest = null;
       }
       _loadModels();
       if (mounted) {
@@ -120,7 +133,7 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
   }
 
   Future<void> _handleTryNow() async {
-    if (_selectedModelForTest == null || _questionController.text.isEmpty) return;
+    if (_selectedModelPathForTest == null || _questionController.text.isEmpty) return;
 
     setState(() {
       _generatedResponse = "";
@@ -129,34 +142,24 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
 
     try {
       print("开始加载");
-      // 1. Install model from file
-      await FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-          .fromFile(_selectedModelForTest!.path)
-          .install();
-      print("安装模型完成");
-      // 2. Get active model and create chat
-      final model = await FlutterGemma.getActiveModel(
-        maxTokens: 2048,
-        preferredBackend: PreferredBackend.cpu
-      );
-      print("获取到模型");
-      final chat = await model.createChat();
-
-      // 3. Add user query
-      await chat.addQueryChunk(Message.text(text: _questionController.text, isUser: true));
-
-      // 4. Listen to stream
-      final stream = chat.generateChatResponseAsync();
       
-      await for (final response in stream) {
-        if (response is TextResponse) {
-          setState(() {
-            _generatedResponse += response.token;
-          });
+      await MascotController().setModelPath(_selectedModelPathForTest!);
+      final model = MascotController().model;
+      
+      if (model != null) {
+        final chat = await model.createChat();
+        await chat.addQueryChunk(Message.text(text: _questionController.text, isUser: true));
+        final stream = chat.generateChatResponseAsync();
+        
+        await for (final response in stream) {
+          if (response is TextResponse) {
+            setState(() {
+              _generatedResponse += response.token;
+            });
+          }
         }
+        chat.close();
       }
-
-      chat.close();
     } catch (e) {
       print(e);
       setState(() {
@@ -186,12 +189,12 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
         child: Column(
           children: [
             _buildHeader(colorScheme),
-            if (_models.isNotEmpty) _buildTryNowPanel(colorScheme, isDark),
+            if (MascotController().availableModels.isNotEmpty) _buildTryNowPanel(colorScheme, isDark),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               child: Divider(),
             ),
-            _models.isEmpty
+            MascotController().availableModels.isEmpty
                 ? SizedBox(
                     height: 300,
                     child: _buildEmptyState(colorScheme),
@@ -280,21 +283,21 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
                 '马上尝试',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              DropdownButton<File>(
-                value: _selectedModelForTest,
+              DropdownButton<String>(
+                value: _selectedModelPathForTest,
                 underline: const SizedBox(),
                 borderRadius: BorderRadius.circular(12),
-                items: _models.map((file) {
-                  return DropdownMenuItem<File>(
-                    value: file,
+                items: MascotController().availableModels.map((file) {
+                  return DropdownMenuItem<String>(
+                    value: file.path,
                     child: Text(
                       p.basename(file.path),
                       style: const TextStyle(fontSize: 14),
                     ),
                   );
                 }).toList(),
-                onChanged: _isGenerating ? null : (File? value) {
-                  setState(() => _selectedModelForTest = value);
+                onChanged: _isGenerating ? null : (String? value) {
+                  setState(() => _selectedModelPathForTest = value);
                 },
               ),
             ],
@@ -363,27 +366,38 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      itemCount: _models.length,
+      itemCount: MascotController().availableModels.length,
       itemBuilder: (context, index) {
-        final file = _models[index];
+        final file = MascotController().availableModels[index];
         final fileName = p.basename(file.path);
         final fileSize = (file.lengthSync() / (1024 * 1024)).toStringAsFixed(2);
+        final isSelected = MascotController().selectedModelPath == file.path;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
             color: isDark ? Colors.grey[900] : Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.5)),
+            border: Border.all(color: isSelected ? colorScheme.primary : colorScheme.outlineVariant.withOpacity(0.5), width: isSelected ? 2 : 1),
           ),
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            leading: Icon(Icons.description_rounded, color: colorScheme.primary),
-            title: Text(fileName, style: const TextStyle(fontWeight: FontWeight.bold)),
+            leading: Icon(Icons.description_rounded, color: isSelected ? colorScheme.primary : Colors.grey),
+            title: Text(fileName, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
             subtitle: Text('$fileSize MB'),
-            trailing: IconButton(
-              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-              onPressed: () => _showDeleteDialog(file),
+            onTap: () {
+              MascotController().setModelPath(file.path);
+            },
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isSelected)
+                  const Icon(Icons.check_circle, color: Colors.green),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                  onPressed: () => _showDeleteDialog(file),
+                ),
+              ],
             ),
           ),
         );

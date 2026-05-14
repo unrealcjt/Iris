@@ -1,3 +1,4 @@
+import 'package:Iris/iris_assistant/gojuon_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -371,6 +372,37 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
     );
   }
 
+  void _showGojuonDialog(BuildContext context) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,      // 点击背景关闭
+      barrierLabel: "Gojuon",
+      barrierColor: Colors.black54,  // 背景遮罩颜色
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, anim1, anim2) {
+        // 这里返回你之前写的那个 GojuonPanel
+        return Center(
+          child: GojuonPanel(
+            onCharTap: (hira) {
+              _controller.speak(hira);
+              // 如果你想点击一个音后自动关闭，可以加 Navigator.pop(context);
+            },
+          ),
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        // 二次元常用的弹跳缩放效果
+        return Transform.scale(
+          scale: Curves.easeOutBack.transform(anim1.value),
+          child: FadeTransition(
+            opacity: anim1,
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildAssistantActions() {
     return Positioned(
       top: 100,
@@ -378,7 +410,13 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          _buildQuickAction(Icons.grid_4x4_rounded, "五十音"),
+          // 五十音弹窗层
+          GestureDetector(
+            onTap: () => setState(() {
+              _showGojuonDialog(context);
+            }),
+            child: _buildQuickAction(Icons.grid_4x4_rounded, "五十音"),
+          ),
           const SizedBox(height: 12),
           
           // 功能集：使用 Row 确保所有子项都在 HitTest 区域内

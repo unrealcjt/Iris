@@ -2,38 +2,31 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
+import 'package:Iris/iris_assistant/mascot_controller.dart';
 
 class GemmaSkill {
-  InferenceModel? _currentModel;
   InferenceModelSession? _activeSession;
 
-  /// 初始化并加载模型
+  InferenceModel? get _currentModel => MascotController().model;
+
+  /// 初始化并加载模型 (现在由 MascotController 统一管理)
   Future<void> initialize({
-    required File modelFile,
+    File? modelFile,
     bool enableVision = false,
     bool enableAudio = false,
   }) async {
-    // 关闭可能存在的旧模型/会话
-    await close();
-
-    // 安装或准备模型
-    await FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-        .fromFile(modelFile.path)
-        .install();
-
-    // 根据模式获取模型
-    _currentModel = await FlutterGemma.getActiveModel(
-      maxTokens: 2048,
-      preferredBackend: PreferredBackend.cpu,
-      supportAudio: enableAudio,
-      supportImage: enableVision,
-    );
+    // 如果 MascotController 还没加载好模型，这里可以尝试确保加载
+    if (_currentModel == null) {
+      await MascotController().init();
+    }
   }
 
   Future<void> stopGenerate() async {
-    await _activeSession!.stopGeneration();
-    await _activeSession?.close();
-    _activeSession = null;
+    if (_activeSession != null) {
+      await _activeSession!.stopGeneration();
+      await _activeSession?.close();
+      _activeSession = null;
+    }
   }
 
   /// 通用流式生成方法
@@ -83,17 +76,13 @@ class GemmaSkill {
     }
   }
 
-  /// 强制停止并关闭所有会话，释放 Native 资源
+  /// 强制停止并关闭当前会话
   Future<void> close() async {
     try {
       if (_activeSession != null) {
         await _activeSession!.stopGeneration();
         await _activeSession!.close();
         _activeSession = null;
-      }
-      if (_currentModel != null) {
-        await _currentModel!.close();
-        _currentModel = null;
       }
     } catch (e) {
       debugPrint("GemmaSkill 关闭失败: $e");
@@ -270,6 +259,32 @@ When formatting the answer, output the the translation only.
   Stream<String> exampleSentenceByWord({required String word}) {
     return _generate(
       prompt: "使用'${word}'生成一句日语例句. now is ${DateTime.now().millisecondsSinceEpoch}",
+    );
+  }
+
+  /// 完善后的题目生成方法
+  Stream<String> generateProblem({
+    required String module,
+    required String typeQ,
+    required String level,
+    int count = 1,
+  }) {
+    return _generate(
+      prompt: """
+You are a professional expert in Japanese education. Please create a Japanese practice question based on the following requirements:
+- Question Type Section：$module
+- Question Type：$typeQ
+- Difficulty level：$level
+
+Output format should remain clear. Please ensure the accuracy and professionalism of the content. And follow the language requirements in the following format.
+
+formatting:
+output the string 'Q', then new line
+1. Question content and options (if the question need options) in Japanese.
+then new line, output string '@Ans', then new line
+2. Correct answer
+3. Analyze in Chinese
+""",
     );
   }
 

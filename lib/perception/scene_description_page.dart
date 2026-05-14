@@ -24,7 +24,7 @@ class _SceneDescriptionPageState extends VisionBaseState<SceneDescriptionPage> {
   }
 
   Future<void> _startDescription() async {
-    if (imageBytes == null || currentModelFile == null) return;
+    if (imageBytes == null) return;
 
     setState(() {
       visionState = VisionState.processing;
@@ -33,7 +33,6 @@ class _SceneDescriptionPageState extends VisionBaseState<SceneDescriptionPage> {
 
     try {
       await _gemmaSkill.initialize(
-        modelFile: currentModelFile!,
         enableVision: true,
       );
 
@@ -198,12 +197,6 @@ class _SceneDescriptionPageState extends VisionBaseState<SceneDescriptionPage> {
       appBar: AppBar(
         title: const Text('场景描述', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: showModelPicker,
-          )
-        ],
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),

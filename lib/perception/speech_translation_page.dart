@@ -21,7 +21,7 @@ class _SpeechTranslationPageState extends AudioBaseState<SpeechTranslationPage> 
   }
 
   Future<void> _startTranslation() async {
-    if (audioBytes == null || currentModelFile == null) return;
+    if (audioBytes == null) return;
 
     setState(() {
       audioState = AudioState.processing;
@@ -30,7 +30,6 @@ class _SpeechTranslationPageState extends AudioBaseState<SpeechTranslationPage> 
 
     try {
       await _gemmaSkill.initialize(
-        modelFile: currentModelFile!,
         enableAudio: true,
       );
 
@@ -60,12 +59,6 @@ class _SpeechTranslationPageState extends AudioBaseState<SpeechTranslationPage> 
       appBar: AppBar(
         title: const Text('语音翻译', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: showModelPicker,
-          )
-        ],
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),

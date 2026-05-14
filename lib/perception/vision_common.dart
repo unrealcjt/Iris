@@ -15,31 +15,10 @@ abstract class VisionBaseState<T extends StatefulWidget> extends State<T> {
   Uint8List? imageBytes;
   String resultText = "";
   VisionState visionState = VisionState.initial;
-  
-  List<File> availableModels = [];
-  File? currentModelFile;
 
   @override
   void initState() {
     super.initState();
-    loadModelFiles();
-  }
-
-  Future<void> loadModelFiles() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final modelDir = Directory(p.join(directory.path, 'models'));
-    if (await modelDir.exists()) {
-      setState(() {
-        availableModels = modelDir
-            .listSync()
-            .whereType<File>()
-            .where((f) => f.path.endsWith('.litertlm'))
-            .toList();
-        if (availableModels.isNotEmpty) {
-           currentModelFile = availableModels.first;
-        }
-      });
-    }
   }
 
   Future<void> pickImage(ImageSource source) async {
@@ -139,37 +118,6 @@ abstract class VisionBaseState<T extends StatefulWidget> extends State<T> {
                 onPressed: () => Navigator.pop(context),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void showModelPicker() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('选择视觉模型', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            if (availableModels.isEmpty)
-              const Text('未发现 .litertlm 模型，请先在设置中导入', style: TextStyle(color: Colors.grey))
-            else
-              ...availableModels.map((file) => ListTile(
-                title: Text(p.basename(file.path)),
-                selected: currentModelFile?.path == file.path,
-                trailing: currentModelFile?.path == file.path ? const Icon(Icons.check_circle, color: Colors.green) : null,
-                onTap: () {
-                  setState(() => currentModelFile = file);
-                  Navigator.pop(context);
-                },
-              )),
-            const SizedBox(height: 24),
           ],
         ),
       ),

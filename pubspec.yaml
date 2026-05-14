@@ -37,7 +37,7 @@ dependencies:
   file_picker: ^8.1.7
   path_provider: ^2.1.5
   path: ^1.9.0
-  flutter_gemma: ^0.13.2
+  flutter_gemma: ^0.15.0
   flutter_markdown: ^0.7.4
   shared_preferences: ^2.2.3
   intl: ^0.20.2
@@ -55,10 +55,11 @@ dependencies:
   edge_tts_dart:
     git:
       url: https://github.com/twn39/edgetts-dart.git
+  flutter_native_splash: ^2.4.7
 
 dependency_overrides:
   record_platform_interface: 1.4.0
-#  sqlite3: 3.2.0
+  sqlite3: 3.2.0
 
 dev_dependencies:
   flutter_test:
@@ -101,6 +102,18 @@ flutter:
     - assets/img/
     - assets/video/
     - assets/jmdict.sqlite
+
+flutter_native_splash:
+  color: "#d3d4cf"           # 背景颜色
+  image: assets/img/icon_desk.png   # 启动图路径
+
+  android_12:                # 针对 Android 12+ 的特殊适配
+    image: assets/img/icon_desk.png
+    color: "#d3d4cf"
+    icon_background_color: "#d3d4cf"
+
+  ios: true                  # 是否开启 iOS 支持
+  android: true              # 是否开启 Android 支持
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

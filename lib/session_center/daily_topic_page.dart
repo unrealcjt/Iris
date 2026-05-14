@@ -23,9 +23,6 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
-  List<File> _availableModels = [];
-  File? _currentModelFile;
-  InferenceModel? _currentModel;
   InferenceChat? _chatSession;
   bool _isLoadingModel = false;
   String _loadingStatus = "";
@@ -63,13 +60,6 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
       _savedTopics = prefs.getStringList('saved_daily_topics') ?? [];
       _language = prefs.getString('scenario_language') ?? "中文";
       _selectedVoice = prefs.getString('scenario_voice');
-      final savedModelPath = prefs.getString('daily_topic_model');
-      if (savedModelPath != null) {
-        final file = File(savedModelPath);
-        if (file.existsSync()) {
-          _currentModelFile = file;
-        }
-      }
     });
   }
 
@@ -92,11 +82,6 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
     }
   }
 
-  Future<void> _saveModelPath(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('daily_topic_model', path);
-  }
-
   @override
   void dispose() {
     close();
@@ -112,10 +97,6 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
         await _chatSession!.stopGeneration();
         await _chatSession!.close();
         _chatSession = null;
-      }
-      if (_currentModel != null) {
-        await _currentModel!.close();
-        _currentModel = null;
       }
     } catch (e) {
       debugPrint("DailyTopic 关闭失败: $e");
@@ -163,17 +144,14 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
 
   Future<void> _initChat() async {
     _fetchVoices();
-    await _loadModelFiles();
-    await _loadSavedTopics(); // 确保加载了保存的模型
+    await _loadSavedTopics();
 
-    if (_currentModelFile != null && _currentModelFile!.existsSync()) {
-      _loadModel(_currentModelFile!);
-    } else if (_availableModels.isNotEmpty) {
-      final e2bModel = _availableModels.firstWhere(
-        (f) => f.path.toLowerCase().contains('e2b'),
-        orElse: () => _availableModels.first,
-      );
-      _loadModel(e2bModel);
+    if (MascotController().model == null) {
+      await MascotController().init();
+    }
+
+    if (MascotController().model != null) {
+      _loadSession();
     } else {
       setState(() {
         _loadingStatus = "未找到可用模型，请先在模型设置中添加 .litertlm 文件";
@@ -192,27 +170,11 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
     }
   }
 
-  Future<void> _loadModelFiles() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final modelDir = Directory(p.join(directory.path, 'models'));
-    if (await modelDir.exists()) {
-      _availableModels = modelDir
-          .listSync()
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.litertlm'))
-          .toList();
-    }
-  }
-
-  Future<void> _loadModel(File modelFile) async {
+  Future<void> _loadSession() async {
     if (_isGenerating) return;
     
-    // 关键：在开启新会话前，强制结束 Mascot 悬浮球的会话和加载状态
-    MascotController().resetChat();
-
     setState(() {
       _isLoadingModel = true;
-      _currentModelFile = modelFile;
       _loadingStatus = "正在捕捉今日灵感...";
     });
     MascotController().setVisible(false);
@@ -224,16 +186,8 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
         _chatSession = null;
       }
 
-      await FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-          .fromFile(modelFile.path)
-          .install();
-      
-      final model = await FlutterGemma.getActiveModel(
-        maxTokens: 4096,
-        preferredBackend: PreferredBackend.cpu,
-      );
-
-      _currentModel = model;
+      final model = MascotController().model;
+      if (model == null) throw Exception("Model not loaded");
       
       String detailInstruction = _showDetails
           ? ""
@@ -260,8 +214,8 @@ $styleInstruction
 
       final session = await model.createChat(
         systemInstruction: systemPrompt,
-        temperature: 0.98,
-        topK: 50,
+        temperature: 1.0,
+        topK: 64,
         topP: 0.95,
         randomSeed: DateTime.now().millisecondsSinceEpoch,
       );
@@ -278,7 +232,6 @@ $styleInstruction
         _activeTtsTasks.clear();
       });
 
-      MascotController().setVisible(false);
       await _generateInitialTopic();
 
     } catch (e) {
@@ -517,7 +470,7 @@ $styleInstruction
   }
 
   Future<void> _handleEndAndAnalyze() async {
-    if (_messages.isEmpty || _currentModelFile == null) return;
+    if (_messages.isEmpty) return;
 
     final bool confirm = await showDialog<bool>(
           context: context,
@@ -558,14 +511,11 @@ $styleInstruction
   }
 
   void _analyzeText(String text) {
-    if (_currentModelFile == null) return;
-    
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => _GrammarAnalysisDialog(
         gemmaSkill: _gemmaSkill,
-        modelFile: _currentModelFile!,
         textContent: text,
       ),
     );
@@ -794,7 +744,6 @@ $styleInstruction
     String? tempVoice = _selectedVoice;
     bool tempShowDetails = _showDetails;
     bool tempIsFormal = _isFormal;
-    File? tempModelFile = _currentModelFile;
 
     String getLocalePrefix(String lang) {
       if (lang == "English") return "en-";
@@ -823,16 +772,6 @@ $styleInstruction
               tempVoice = null;
             }
 
-            // 确保 tempModelFile 指向 _availableModels 中的同一个实例，或者直接通过路径匹配
-            File? selectedModel;
-            try {
-              selectedModel = _availableModels.firstWhere(
-                (f) => f.path == tempModelFile?.path,
-              );
-            } catch (_) {
-              selectedModel = _availableModels.isNotEmpty ? _availableModels.first : null;
-            }
-
             return SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -854,16 +793,6 @@ $styleInstruction
                     ],
                   ),
                   const SizedBox(height: 20),
-                  DropdownButtonFormField<File>(
-                    value: selectedModel,
-                    decoration: const InputDecoration(labelText: "选择模型", border: OutlineInputBorder()),
-                    items: _availableModels.map((file) => DropdownMenuItem(
-                      value: file,
-                      child: Text(p.basename(file.path), style: const TextStyle(fontSize: 14)),
-                    )).toList(),
-                    onChanged: (val) => setModalState(() => tempModelFile = val),
-                  ),
-                  const SizedBox(height: 16),
                   TextField(
                     controller: topicController,
                     decoration: const InputDecoration(
@@ -981,11 +910,8 @@ $styleInstruction
                         });
                         _saveLanguage(tempLanguage);
                         _saveVoice(tempVoice);
-                        if (tempModelFile != null) {
-                          _saveModelPath(tempModelFile!.path);
-                        }
                         Navigator.pop(context);
-                        if (tempModelFile != null) _loadModel(tempModelFile!);
+                        _loadSession();
                       },
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1087,12 +1013,10 @@ $styleInstruction
 
 class _GrammarAnalysisDialog extends StatefulWidget {
   final GemmaSkill gemmaSkill;
-  final File modelFile;
   final String textContent;
 
   const _GrammarAnalysisDialog({
     required this.gemmaSkill,
-    required this.modelFile,
     required this.textContent,
   });
 
@@ -1112,13 +1036,13 @@ class _GrammarAnalysisDialogState extends State<_GrammarAnalysisDialog> {
 
   @override
   void dispose() {
-    widget.gemmaSkill.close();
+    widget.gemmaSkill.stopGenerate();
     super.dispose();
   }
 
   Future<void> _startAnalysis() async {
     try {
-      await widget.gemmaSkill.initialize(modelFile: widget.modelFile);
+      await widget.gemmaSkill.initialize();
       final stream = widget.gemmaSkill.analyzeGrammar(textContent: widget.textContent);
       
       await for (final response in stream) {

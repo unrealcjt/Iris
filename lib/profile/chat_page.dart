@@ -1,7 +1,7 @@
 import 'dart:io';
+import 'package:Iris/iris_assistant/mascot_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_markdown/flutter_markdown.dart';
 
@@ -17,8 +17,6 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
-  List<File> _availableModels = [];
-  File? _currentModelFile;
   InferenceChat? _chatSession;
   bool _isLoadingModel = false;
   String _loadingStatus = "";
@@ -30,90 +28,73 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
+    MascotController().addListener(_onMascotChanged);
     _initChat();
   }
 
   @override
   void dispose() {
+    MascotController().removeListener(_onMascotChanged);
     _chatSession?.close();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
+  void _onMascotChanged() {
+    if (_chatSession == null && MascotController().model != null) {
+      _initChat();
+    }
+  }
+
   Future<void> _initChat() async {
-    await _loadModelFiles();
-    if (_availableModels.isNotEmpty) {
-      // 优先选择包含 e2b 的模型，否则选第一个
-      final e2bModel = _availableModels.firstWhere(
-        (f) => f.path.toLowerCase().contains('e2b'),
-        orElse: () => _availableModels.first,
-      );
-      _loadModel(e2bModel);
+    if (MascotController().model == null) {
+      setState(() {
+        _isLoadingModel = true;
+        _loadingStatus = "正在等待模型加载...";
+      });
+      await MascotController().init();
+    }
+    
+    if (MascotController().model != null) {
+      _loadSession();
     } else {
       setState(() {
-        _loadingStatus = "未找到可用模型，请先在模型设置中添加 .litertlm 文件";
+        _isLoadingModel = false;
+        _loadingStatus = "未找到可用模型，请先导入 .litertlm 文件";
       });
     }
   }
 
-  Future<void> _loadModelFiles() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final modelDir = Directory(p.join(directory.path, 'models'));
-    if (await modelDir.exists()) {
-      _availableModels = modelDir
-          .listSync()
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.litertlm'))
-          .toList();
-    }
-  }
-
-  Future<void> _loadModel(File modelFile) async {
+  Future<void> _loadSession() async {
     if (_isGenerating) return;
     
     setState(() {
       _isLoadingModel = true;
-      _currentModelFile = modelFile;
       _loadingStatus = "正在配置 ${_isThinkingMode ? "思考" : "快速"} 引擎...";
     });
 
     try {
-      // 1. 先彻底关闭并清空旧会话，释放 Native 资源
       if (_chatSession != null) {
         await _chatSession!.close();
         _chatSession = null;
       }
       
-      // 给 Native 层一点点时间释放内存/句柄
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      // 2. Install (挂载新模型)
-      await FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-          .fromFile(modelFile.path)
-          .install();
-      
-      // 3. 获取活动模型
-      final model = await FlutterGemma.getActiveModel(
-        maxTokens: 2048,
-        preferredBackend: PreferredBackend.cpu,
-      );
-      
-      // 4. 创建新会话 (支持思考模式)
-      final session = await model.createChat(
-        isThinking: _isThinkingMode,
-      );
+      final model = MascotController().model;
+      if (model != null) {
+        _chatSession = await model.createChat(
+          isThinking: _isThinkingMode,
+        );
+      }
 
       setState(() {
-        _chatSession = session;
         _isLoadingModel = false;
-        // 切换模型后清空对话历史以保证上下文干净
         _messages.clear();
       });
     } catch (e) {
-      debugPrint("模型切换失败: $e");
+      debugPrint("会话创建失败: $e");
       setState(() {
-        _loadingStatus = "模型加载失败: $e";
+        _loadingStatus = "会话创建失败: $e";
         _isLoadingModel = false;
       });
     }
@@ -195,23 +176,8 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Column(
-          children: [
-            const Text('智能对话', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            if (_currentModelFile != null)
-              Text(
-                p.basename(_currentModelFile!.path),
-                style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant),
-              ),
-          ],
-        ),
+        title: const Text('智能对话', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_suggest_outlined),
-            onPressed: _showModelPicker,
-          )
-        ],
       ),
       body: Stack(
         children: [
@@ -284,7 +250,7 @@ class _ChatPageState extends State<ChatPage> {
 
     if (confirm && mounted) {
       setState(() => _isThinkingMode = newVal);
-      if (_currentModelFile != null) _loadModel(_currentModelFile!);
+      _loadSession();
     }
   }
 
@@ -451,60 +417,6 @@ class _ChatPageState extends State<ChatPage> {
               onPressed: (_isGenerating || _isLoadingModel) ? null : _sendMessage,
               icon: Icon(_isGenerating ? Icons.hourglass_empty : Icons.send_rounded),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showModelPicker() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("切换模型", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            ..._availableModels.map((file) => ListTile(
-              leading: const Icon(Icons.model_training),
-              title: Text(p.basename(file.path)),
-              selected: _currentModelFile?.path == file.path,
-              onTap: () async {
-                if (_currentModelFile?.path == file.path) {
-                  Navigator.pop(context);
-                  return;
-                }
-
-                bool confirm = true;
-                if (_messages.isNotEmpty) {
-                  confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('确认切换'),
-                          content: const Text('切换模型将清空当前所有对话记录，确定要继续吗？'),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-                            TextButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              child: const Text('确定', style: TextStyle(color: Colors.red)),
-                            ),
-                          ],
-                        ),
-                      ) ??
-                      false;
-                }
-
-                final navigator = Navigator.of(context);
-                if (confirm && mounted) {
-                  navigator.pop();
-                  _loadModel(file);
-                }
-              },
-            )),
           ],
         ),
       ),

@@ -1,5 +1,7 @@
 import 'package:Iris/practice/search_result_screen.dart';
+import 'package:Iris/practice/trial_page.dart';
 import 'package:Iris/practice/vocabulary_list_page.dart';
+import 'package:Iris/utils/wa_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -110,7 +112,10 @@ class _PracticePageState extends State<PracticePage> {
                     icon: Icons.quiz_rounded,
                     color: Colors.orangeAccent,
                     onTap: () {
-                      // TODO: 实现跳转
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const TrialPage())
+                      );
                     },
                   ),
                 ],

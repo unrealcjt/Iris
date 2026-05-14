@@ -7,8 +7,9 @@ import 'package:Iris/jm/dictionary_service.dart';
 import 'package:Iris/jm/models.dart';
 import 'dart:io';
 
-import 'package:Iris/jm/jm_parser.dart';
+import 'package:Iris/utils/wa_colors.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:Iris/jm/jm_parser.dart';
 import 'vocabulary_service.dart';
 import 'vocabulary_model.dart';
 
@@ -41,13 +42,7 @@ class _SearchResultScreenState extends State<SearchResultScreen> {
     });
 
     try {
-      final modelPath = MascotController().selectedModelPath;
-      if (modelPath == null) {
-        setState(() => _exampleSentence = "请先在 Mascot 设置中选择模型");
-        return;
-      }
-
-      await _gemmaSkill.initialize(modelFile: File(modelPath));
+      await _gemmaSkill.initialize();
       final stream = _gemmaSkill.exampleSentenceByWord(word: word);
       
       await for (final chunk in stream) {
@@ -663,11 +658,4 @@ class _SearchResultScreenState extends State<SearchResultScreen> {
 
 }
 
-// 和风配色常量
-class WaColors {
-  static const Color akaRed = Color(0xFFB13B28);    // 绯红，用于强调和标题
-  static const Color washiPaper = Color(0xFFF8F4ED); // 纸色，作为背景
-  static const Color sumiBlack = Color(0xFF2B2B2B);  // 墨色，用于正文
-  static const Color kokeGreen = Color(0xFF6B7E5F);  // 苔绿，用于词性标签
-  static const Color skyBlue = Color(0xFF6A8CAF);    // 露草色，用于汉字交互
-}
+// 和风配色常量 (已移至 lib/utils/wa_colors.dart)

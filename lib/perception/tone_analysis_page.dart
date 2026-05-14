@@ -32,20 +32,12 @@ class _ToneAnalysisPageState extends AudioBaseState<ToneAnalysisPage> {
     });
 
     try {
-      if (currentModelFile == null) {
-        await loadModelFiles();
-      }
-      
-      if (currentModelFile != null) {
-        await _gemmaSkill.initialize(modelFile: currentModelFile!);
-        final stream = _gemmaSkill.scenarioAsk();
-        await for (final chunk in stream) {
-          setState(() {
-            _scenarioController.text += chunk;
-          });
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请先选择模型')));
+      await _gemmaSkill.initialize();
+      final stream = _gemmaSkill.scenarioAsk();
+      await for (final chunk in stream) {
+        setState(() {
+          _scenarioController.text += chunk;
+        });
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('生成场景失败: $e')));
@@ -55,7 +47,7 @@ class _ToneAnalysisPageState extends AudioBaseState<ToneAnalysisPage> {
   }
 
   Future<void> _startAnalysis() async {
-    if (audioBytes == null || currentModelFile == null || _scenarioController.text.isEmpty) return;
+    if (audioBytes == null || _scenarioController.text.isEmpty) return;
 
     setState(() {
       audioState = AudioState.processing;
@@ -64,7 +56,6 @@ class _ToneAnalysisPageState extends AudioBaseState<ToneAnalysisPage> {
 
     try {
       await _gemmaSkill.initialize(
-        modelFile: currentModelFile!,
         enableAudio: true,
       );
 
@@ -98,12 +89,6 @@ class _ToneAnalysisPageState extends AudioBaseState<ToneAnalysisPage> {
       appBar: AppBar(
         title: const Text('语气分析', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: showModelPicker,
-          )
-        ],
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),

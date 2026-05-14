@@ -13,25 +13,77 @@ import 'jm/dictionary_service.dart';
 import 'practice/vocabulary_service.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // 初始化 Flutter Gemma
-  await FlutterGemma.initialize();
-  
-  // 加载 .env 文件
-  await dotenv.load(fileName: ".env");
+  // WidgetsFlutterBinding.ensureInitialized();
+  //
+  // // 初始化 Flutter Gemma
+  // await FlutterGemma.initialize();
+  //
+  // // 加载 .env 文件
+  // await dotenv.load(fileName: ".env");
+  //
+  // // 初始化 Supabase
+  // await Supabase.initialize(
+  //   url: dotenv.get('SUPABASE_URL'),
+  //   anonKey: dotenv.get('SUPABASE_ANON_KEY'),
+  // );
+  //
+  // // 启动数据库服务
+  // await DictionaryService().init();
+  // await VocabularyService().init();
+  //
+  // // 初始化 MascotController 并加载模型
+  // await MascotController().init();
 
-  // 初始化 Supabase
-  await Supabase.initialize(
-    url: dotenv.get('SUPABASE_URL'),
-    anonKey: dotenv.get('SUPABASE_ANON_KEY'),
-  );
+  // runApp(const IrisApp());
+  runApp(MaterialApp(home: SplashScreen()));
+}
 
-  // 启动数据库服务
-  await DictionaryService().init();
-  await VocabularyService().init();
+class SplashScreen extends StatefulWidget {
+  @override
+  _SplashScreenState createState() => _SplashScreenState();
+}
 
-  runApp(const IrisApp());
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _prepareApp();
+  }
+
+  Future<void> _prepareApp() async {
+    // 1. 这里执行你 main 函数里的那些初始化逻辑
+    await FlutterGemma.initialize();
+    await dotenv.load(fileName: ".env");
+    await Supabase.initialize(
+      url: dotenv.get('SUPABASE_URL'),
+      anonKey: dotenv.get('SUPABASE_ANON_KEY'),
+    );
+    await DictionaryService().init();
+    await VocabularyService().init();
+    await MascotController().init();
+
+    // 2. 初始化完成后，跳转到主界面
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const IrisApp()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        // 这里换成你的视频播放器或 Lottie 动画
+        child: Image.asset(
+            'assets/img/Iris_Scarlet.png',
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+        ),
+      ),
+    );
+  }
 }
 
 class IrisApp extends StatelessWidget {

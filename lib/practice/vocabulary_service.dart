@@ -54,6 +54,53 @@ class VocabularyService {
     return maps.map((m) => VocabularyEntry.fromMap(m)).toList();
   }
 
+  Future<List<VocabularyEntry>> getDueEntries() async {
+    final now = DateTime.now().toIso8601String();
+    final List<Map<String, dynamic>> maps = await _db!.query(
+      'vocabulary',
+      where: 'reviewTime <= ? AND familiarity > 0',
+      whereArgs: [now],
+      orderBy: 'reviewTime ASC',
+    );
+    return maps.map((m) => VocabularyEntry.fromMap(m)).toList();
+  }
+
+  Future<List<VocabularyEntry>> getNewEntries(int limit) async {
+    final List<Map<String, dynamic>> maps = await _db!.query(
+      'vocabulary',
+      where: 'familiarity = 0',
+      limit: limit,
+      orderBy: 'addTime ASC',
+    );
+    return maps.map((m) => VocabularyEntry.fromMap(m)).toList();
+  }
+
+  Future<void> resetAllProgress() async {
+    await _db!.update(
+      'vocabulary',
+      {
+        'familiarity': 0,
+        'reviewTime': DateTime.now().toIso8601String(),
+      },
+    );
+  }
+
+  Future<void> updateFamiliarity(int entSeq, int familiarity, DateTime nextReview) async {
+    await _db!.update(
+      'vocabulary',
+      {
+        'familiarity': familiarity,
+        'reviewTime': nextReview.toIso8601String(),
+      },
+      where: 'entSeq = ?',
+      whereArgs: [entSeq],
+    );
+  }
+
+  Future<String> getDatabasePath() async {
+    return _db!.path;
+  }
+
   Future<bool> isCollected(int entSeq) async {
     final List<Map<String, dynamic>> maps = await _db!.query(
       'vocabulary',

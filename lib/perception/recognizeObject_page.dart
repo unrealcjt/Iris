@@ -41,7 +41,7 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
   }
 
   Future<void> _startRecognition() async {
-    if (imageBytes == null || currentModelFile == null) return;
+    if (imageBytes == null) return;
 
     setState(() {
       visionState = VisionState.processing;
@@ -55,7 +55,6 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
 
     try {
       await _gemmaSkill.initialize(
-        modelFile: currentModelFile!,
         enableVision: true,
       );
 
@@ -151,12 +150,6 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
       appBar: AppBar(
         title: const Text('看图识物', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: showModelPicker,
-          )
-        ],
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),

@@ -1,4 +1,5 @@
 import 'package:Iris/perception/analyze_problem_page.dart';
+import 'package:Iris/perception/full_duplex_chat_page.dart';
 import 'package:Iris/perception/pronunciation_analysis_page.dart';
 import 'package:Iris/perception/recognizeObject_page.dart';
 import 'package:Iris/perception/scene_description_page.dart';
@@ -172,6 +173,18 @@ class _PerceptionPageState extends State<PerceptionPage> with SingleTickerProvid
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const SpeechTranslationPage()),
+            );
+          },
+        ),
+        _buildModuleCard(
+          icon: Icons.forum_rounded,
+          title: '全双工对话',
+          subtitle: '实时语音交互',
+          color: Colors.deepOrange,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const FullDuplexChatPage()),
             );
           },
         ),

@@ -37,7 +37,6 @@ class EdgeTtsService {
         await _audioPlayer.play(BytesSource(bytes));
         // 等待当前片段播放完成
         await _audioPlayer.onPlayerComplete.first;
-
       } catch (e) {
         print('Edge TTS 播放片段失败: $e');
       }
@@ -67,7 +66,6 @@ class EdgeTtsService {
     List<int> audioBytes = [];
 
     try {
-      double time = 0.0;
       await for (final chunk in communicate.stream()) {
         if (chunk.type == "audio" && chunk.audioData != null) {
           audioBytes.addAll(chunk.audioData!);

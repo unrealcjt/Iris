@@ -200,6 +200,14 @@ When formatting the answer, first output the transcription in ${sourceLang}, the
     );
   }
 
+  /// 全双工语音对话
+  Stream<String> audioChat({required Uint8List audioBytes}) {
+    return _generate(
+      prompt: "你是一个贴心的日语助手 Iris。请听用户的语音输入（日语），并用简洁的日语进行回应，保持对话自然流畅。直接输出你的回复内容。",
+      audioBytes: audioBytes,
+    );
+  }
+
   // ================= 基础能力 =================
 
   /// 语法分析

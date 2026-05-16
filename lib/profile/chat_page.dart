@@ -24,6 +24,10 @@ class _ChatPageState extends State<ChatPage> {
 
   // 模式选择：快速 vs 思考
   bool _isThinkingMode = false;
+  
+  // 防死循环计数器
+  int _recursiveToolCallCount = 0;
+  static const int _maxRecursiveCalls = 2;
 
   @override
   void initState() {
@@ -84,6 +88,25 @@ class _ChatPageState extends State<ChatPage> {
       if (model != null) {
         _chatSession = await model.createChat(
           isThinking: _isThinkingMode,
+          modelType: ModelType.gemma4,
+          supportsFunctionCalls: true,
+          systemInstruction: "你是一个名为 Iris 的助理。请使用 'speak' 工具来回答用户。请在一次回复中同时完成工具调用和对应的文字输出。收到工具执行成功的反馈后，请直接结束对话，不要重复调用工具。",
+          tools: [
+            const Tool(
+              name: 'speak',
+              description: '将回复文本转换为语音播放给用户听。',
+              parameters: {
+                'type': 'object',
+                'properties': {
+                  'text': {
+                    'type': 'string',
+                    'description': '需要播放的文本内容',
+                  },
+                },
+                'required': ['text'],
+              },
+            ),
+          ],
         );
       }
 
@@ -125,47 +148,131 @@ class _ChatPageState extends State<ChatPage> {
     
     setState(() {
       _messages.add(userMsg);
-      _messages.add(Message.text(text: "", isUser: false)); // Placeholder for AI response
       _isGenerating = true;
     });
     _scrollToBottom();
 
     try {
+      _recursiveToolCallCount = 0;
       await _chatSession!.addQueryChunk(userMsg);
-      final stream = _chatSession!.generateChatResponseAsync();
-      
-      String fullResponse = "";
-      String thinkingProcess = "";
-
-      await for (final response in stream) {
-        if (response is TextResponse) {
-          fullResponse += response.token;
-          setState(() {
-            _messages[_messages.length - 1] = Message(
-              text: fullResponse, 
-              isUser: false,
-              toolName: thinkingProcess.isNotEmpty ? thinkingProcess : null,
-            );
-          });
-          _scrollToBottom();
-        } else if (response is ThinkingResponse) {
-          thinkingProcess += response.content;
-          setState(() {
-            _messages[_messages.length - 1] = Message(
-              text: fullResponse,
-              isUser: false,
-              toolName: thinkingProcess,
-            );
-          });
-          _scrollToBottom();
-        }
-      }
+      await _processModelResponse();
     } catch (e) {
+      debugPrint("消息发送失败: $e");
       setState(() {
-        _messages[_messages.length - 1] = Message.text(text: "错误: $e", isUser: false);
+        _messages.add(Message.text(text: "错误: $e", isUser: false));
       });
     } finally {
       setState(() => _isGenerating = false);
+    }
+  }
+
+  Future<void> _processModelResponse() async {
+    if (_recursiveToolCallCount > _maxRecursiveCalls) {
+      debugPrint("检测到潜在的工具调用死循环，已强制中断。");
+      return;
+    }
+
+    debugPrint("开始获取模型响应流...");
+    final stream = _chatSession!.generateChatResponseAsync();
+    
+    String fullResponse = "";
+    String thinkingProcess = "";
+    bool hasFunctionCall = false;
+    int? aiMsgIndex;
+
+    await for (final response in stream) {
+      if (response is TextResponse || response is ThinkingResponse) {
+        if (aiMsgIndex == null) {
+          setState(() {
+            _messages.add(Message.text(text: "", isUser: false));
+            aiMsgIndex = _messages.length - 1;
+          });
+        }
+
+        if (response is TextResponse) {
+          fullResponse += response.token;
+        } else if (response is ThinkingResponse) {
+          thinkingProcess += response.content;
+        }
+
+        final displayShowing = _cleanResponseText(fullResponse);
+
+        setState(() {
+          _messages[aiMsgIndex!] = Message(
+            text: displayShowing, 
+            isUser: false,
+            // 如果清理后没有文本且没有思考，先标记为 toolCall 隐藏，防止显示空气泡或 JSON
+            type: (displayShowing.isEmpty && thinkingProcess.isEmpty) ? MessageType.toolCall : MessageType.text,
+            toolName: thinkingProcess.isNotEmpty ? thinkingProcess : null,
+          );
+        });
+        _scrollToBottom();
+      } else if (response is FunctionCallResponse) {
+        debugPrint("捕获到工具调用: ${response.name}");
+        hasFunctionCall = true;
+        _recursiveToolCallCount++;
+        // 如果当前消息气泡清理后是空的，说明它只包含工具调用 JSON，隐藏它
+        if (aiMsgIndex != null && _cleanResponseText(fullResponse).isEmpty) {
+          setState(() {
+            _messages[aiMsgIndex!] = _messages[aiMsgIndex!].copyWith(type: MessageType.toolCall);
+          });
+        }
+        await _handleFunctionCall(response);
+      } else if (response is ParallelFunctionCallResponse) {
+        debugPrint("捕获到并行工具调用: ${response.calls.length} 个");
+        hasFunctionCall = true;
+        if (aiMsgIndex != null && _cleanResponseText(fullResponse).isEmpty) {
+          setState(() {
+            _messages[aiMsgIndex!] = _messages[aiMsgIndex!].copyWith(type: MessageType.toolCall);
+          });
+        }
+        for (final call in response.calls) {
+          await _handleFunctionCall(call);
+        }
+      }
+    }
+
+    if (hasFunctionCall) {
+      debugPrint("工具执行完毕，请求模型处理后续结果...");
+      await _processModelResponse();
+    }
+  }
+
+  String _cleanResponseText(String text) {
+    // 移除 Gemma 4 的工具调用标记及其内部 JSON 内容
+    // 匹配 <|tool_call|>...<|tool_call|> 及其中的内容
+    String cleaned = text
+        .replaceAll(RegExp(r'<\|tool_call\|>.*?<\|tool_call\|>', dotAll: true), '')
+        .replaceAll(RegExp(r'<\|.*?\|>', dotAll: true), '') // 移除其他可能的 <|...|> 标记
+        .trim();
+
+    // 如果清理后剩下的内容看起来像是一个单独的 JSON 对象（通常是未被标记完全的工具调用）
+    if (cleaned.startsWith('{') && cleaned.endsWith('}') && cleaned.contains('"name"')) {
+      return "";
+    }
+
+    return cleaned;
+  }
+
+  Future<void> _handleFunctionCall(FunctionCallResponse call) async {
+    debugPrint("执行工具逻辑: ${call.name}, 参数: ${call.args}");
+    if (call.name == 'speak') {
+      final textToSpeak = call.args['text'] as String?;
+      if (textToSpeak != null && textToSpeak.isNotEmpty) {
+        setState(() {
+          _messages.add(Message.systemInfo(text: "Iris 正在为您播报...", icon: "volume_up"));
+        });
+        _scrollToBottom();
+        
+        // 调用看板娘控制器的播放逻辑，它会自动处理多语言配音
+        await MascotController().speak(textToSpeak);
+        
+        // 向模型反馈结果
+        await _chatSession!.addQueryChunk(Message.toolResponse(
+          toolName: 'speak',
+          response: {'status': 'success'},
+        ));
+      }
     }
   }
 
@@ -297,18 +404,72 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Widget _buildMessageList() {
+    final bool showThinking = _isGenerating && 
+        (_messages.isEmpty || _messages.last.isUser || _messages.last.type == MessageType.toolResponse);
+
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: _messages.length,
+      itemCount: _messages.length + (showThinking ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == _messages.length) {
+          return _buildWaitingBubble();
+        }
+        
         final msg = _messages[index];
+        // 隐藏模型内部的工具调用和响应消息，只显示文本、思考过程和系统提示
+        if (msg.type == MessageType.toolCall || msg.type == MessageType.toolResponse) {
+          return const SizedBox.shrink();
+        }
         return _buildMessageBubble(msg);
       },
     );
   }
 
+  Widget _buildWaitingBubble() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildAvatar(Icons.bolt, colorScheme.primary),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(20).copyWith(
+                bottomLeft: const Radius.circular(0),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const _TypingIndicator(),
+                const SizedBox(width: 8),
+                Text(
+                  "Iris 正在思考...",
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(Message msg) {
+    if (msg.type == MessageType.systemInfo) {
+      return _buildSystemInfo(msg);
+    }
+    
     final isUser = msg.isUser;
     final colorScheme = Theme.of(context).colorScheme;
     
@@ -385,6 +546,55 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  Widget _buildSystemInfo(Message msg) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final bool isSpeaking = msg.toolName == 'volume_up';
+    
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: colorScheme.secondaryContainer.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: colorScheme.secondary.withValues(alpha: 0.1)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isSpeaking)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(colorScheme.secondary),
+                  ),
+                ),
+              )
+            else
+              Icon(
+                Icons.info_outline_rounded,
+                size: 16,
+                color: colorScheme.secondary,
+              ),
+            if (!isSpeaking) const SizedBox(width: 8),
+            Text(
+              msg.text,
+              style: TextStyle(
+                fontSize: 12,
+                color: colorScheme.onSecondaryContainer.withValues(alpha: 0.8),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildInputArea(ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -430,6 +640,57 @@ class _ThinkingBlock extends StatefulWidget {
 
   @override
   State<_ThinkingBlock> createState() => _ThinkingBlockState();
+}
+
+class _TypingIndicator extends StatefulWidget {
+  const _TypingIndicator();
+
+  @override
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
+}
+
+class _TypingIndicatorState extends State<_TypingIndicator> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (index) {
+            final double opacity = ((_controller.value * 3 - index).remainder(3) / 3).clamp(0.2, 1.0);
+            return Container(
+              width: 4,
+              height: 4,
+              margin: const EdgeInsets.symmetric(horizontal: 1),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withOpacity(opacity),
+                shape: BoxShape.circle,
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
 }
 
 class _ThinkingBlockState extends State<_ThinkingBlock> {

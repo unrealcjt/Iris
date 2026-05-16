@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:edge_tts_dart/edge_tts_dart.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class EdgeTtsService {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -10,12 +11,24 @@ class EdgeTtsService {
   bool _isQueuePlaying = false;
   final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
 
-  /// 生成语音并播放 (单次直接播放)
+  /// 生成语音并播放 (单次直接播放，并等待播放完成)
   Future<void> speak(String text, {String? voiceName, rate="+0%", volume="+0%", pitch="+0Hz"}) async {
     final bytes = await getAudioBytes(text, voiceName: voiceName, rate: rate, volume: volume, pitch: pitch);
     if (bytes != null) {
       await stop(); // 先停止之前的播放
-      await _audioPlayer.play(BytesSource(bytes));
+      isPlayingNotifier.value = true;
+      try {
+        await _audioPlayer.play(BytesSource(bytes));
+        // 等待播放完成，或者直到播放器状态变为 stopped/paused
+        await Future.any([
+          _audioPlayer.onPlayerComplete.first,
+          _audioPlayer.onPlayerStateChanged.firstWhere((state) => state == PlayerState.stopped || state == PlayerState.paused),
+        ]);
+      } catch (e) {
+        debugPrint('Edge TTS 播放失败: $e');
+      } finally {
+        isPlayingNotifier.value = false;
+      }
     }
   }
 
@@ -53,14 +66,30 @@ class EdgeTtsService {
   }
 
   /// 仅生成音频字节而不播放
-  Future<Uint8List?> getAudioBytes(String text, {String? voiceName, rate="+0%", volume="+0%", pitch="+0Hz"}) async {
+  Future<Uint8List?> getAudioBytes(String text, {String? voiceName, String? rate, String? volume, String? pitch}) async {
+    // 优先使用传入参数，否则尝试从持久化存储中读取全局设置
+    String finalRate = rate ?? "+0%";
+    String finalVolume = volume ?? "+0%";
+    String finalPitch = pitch ?? "+0Hz";
+
+    if (rate == null || volume == null || pitch == null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (rate == null) finalRate = prefs.getString('tts_rate') ?? "+0%";
+        if (volume == null) finalVolume = prefs.getString('tts_volume') ?? "+0%";
+        if (pitch == null) finalPitch = prefs.getString('tts_pitch') ?? "+0Hz";
+      } catch (e) {
+        debugPrint('TTS 读取持久化设置失败: $e');
+      }
+    }
+
     final selectedVoice = voiceName ?? 'zh-CN-XiaoxiaoNeural';
     final communicate = Communicate(
       text: text,
       voice: selectedVoice,
-      rate: rate,
-      volume: volume,
-      pitch: pitch,
+      rate: finalRate,
+      volume: finalVolume,
+      pitch: finalPitch,
     );
 
     List<int> audioBytes = [];

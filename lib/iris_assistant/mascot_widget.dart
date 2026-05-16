@@ -1,3 +1,4 @@
+import 'package:Iris/custom_component/iris_selection_area.dart';
 import 'package:Iris/iris_assistant/gojuon_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
@@ -633,7 +634,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
       color: Colors.black87,
       child: Center(
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 30),
+          margin: const EdgeInsets.symmetric(horizontal: 30, vertical: 40),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.grey[900],
@@ -643,39 +644,138 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("选择模型", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text("模型与语音设置", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("模型选择", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 8),
               Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _controller.availableModels.length,
-                  itemBuilder: (context, index) {
-                    final model = _controller.availableModels[index];
-                    final isSelected = _controller.selectedModelPath == model.path;
-                    return ListTile(
-                      title: Text(
-                        p.basename(model.path),
-                        style: TextStyle(color: isSelected ? Colors.pinkAccent : Colors.white70),
-                      ),
-                      trailing: isSelected ? const Icon(Icons.check, color: Colors.pinkAccent) : null,
-                      onTap: () {
-                        _controller.setModelPath(model.path);
-                        setState(() => _isModelSelectionOpen = false);
-                      },
-                    );
-                  },
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 180),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: _controller.availableModels.length,
+                    itemBuilder: (context, index) {
+                      final model = _controller.availableModels[index];
+                      final isSelected = _controller.selectedModelPath == model.path;
+                      return ListTile(
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                        title: Text(
+                          p.basename(model.path),
+                          style: TextStyle(color: isSelected ? Colors.pinkAccent : Colors.white70, fontSize: 14),
+                        ),
+                        trailing: isSelected ? const Icon(Icons.check, color: Colors.pinkAccent, size: 16) : null,
+                        onTap: () {
+                          _controller.setModelPath(model.path);
+                        },
+                      );
+                    },
+                  ),
                 ),
               ),
+              const Divider(color: Colors.white10, height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("语音参数调节", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
+                  IconButton(
+                    onPressed: () => _controller.updateTtsParams(rate: "+0%", volume: "+0%", pitch: "+0Hz"),
+                    icon: const Icon(Icons.settings_backup_restore_rounded, size: 18, color: Colors.pinkAccent),
+                    tooltip: "重置参数",
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildTtsSlider(
+                label: "语速",
+                value: _parseTtsValue(_controller.ttsRate),
+                onChanged: (v) => _controller.updateTtsParams(rate: _formatTtsValue(v, suffix: "%")),
+              ),
+              _buildTtsSlider(
+                label: "音量",
+                value: _parseTtsValue(_controller.ttsVolume),
+                onChanged: (v) => _controller.updateTtsParams(volume: _formatTtsValue(v, suffix: "%")),
+              ),
+              _buildTtsSlider(
+                label: "音高",
+                value: _parseTtsValue(_controller.ttsPitch),
+                onChanged: (v) => _controller.updateTtsParams(pitch: _formatTtsValue(v, suffix: "Hz")),
+              ),
               const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => setState(() => _isModelSelectionOpen = false),
-                child: const Text("取消"),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.pinkAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => setState(() => _isModelSelectionOpen = false),
+                  child: const Text("完成配置"),
+                ),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildTtsSlider({required String label, required double value, required ValueChanged<double> onChanged}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(width: 36, child: Text(label, style: const TextStyle(color: Colors.white60, fontSize: 12))),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 2,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+              ),
+              child: Slider(
+                value: value,
+                min: -100,
+                max: 100,
+                divisions: 200,
+                activeColor: Colors.pinkAccent,
+                inactiveColor: Colors.white10,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 40,
+            child: Text(
+              value >= 0 ? "+${value.toInt()}" : value.toInt().toString(),
+              style: const TextStyle(color: Colors.pinkAccent, fontSize: 11, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  double _parseTtsValue(String raw) {
+    final match = RegExp(r'([+-]?\d+)').firstMatch(raw);
+    if (match != null) {
+      return double.tryParse(match.group(1)!) ?? 0;
+    }
+    return 0;
+  }
+
+  String _formatTtsValue(double value, {required String suffix}) {
+    final valInt = value.toInt();
+    final prefix = valInt >= 0 ? "+" : "";
+    return "$prefix$valInt$suffix";
   }
 
   Widget _buildModeTab(String label, MascotAssistantMode mode) {
@@ -837,27 +937,50 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
             child: SingleChildScrollView(
               controller: _scrollController,
               padding: const EdgeInsets.fromLTRB(16, 5, 16, 30),
-              child: MarkdownBody(
-                data: _controller.currentDialogueText,
-                styleSheet: MarkdownStyleSheet(
-                  p: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    height: 1.6,
-                    shadows: [Shadow(color: Colors.black, blurRadius: 2)],
-                  ),
-                  code: TextStyle(
-                    backgroundColor: Colors.black.withOpacity(0.3),
-                    color: Colors.amberAccent,
-                    fontFamily: 'monospace',
-                    fontSize: 18
-                  ),
-                  codeblockDecoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
+              child: _controller.isGenerating && _controller.currentDialogueText.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(height: 20),
+                          const _TypingIndicator(),
+                          const SizedBox(height: 12),
+                          Text(
+                            "Iris 正在思考...",
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.8),
+                              fontSize: 14,
+                              fontStyle: FontStyle.italic,
+                              shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  :
+                    IrisSelectionArea(
+                      child: MarkdownBody(
+                        data: _controller.currentDialogueText,
+                        styleSheet: MarkdownStyleSheet(
+                          p: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            height: 1.6,
+                            shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+                          ),
+                          code: TextStyle(
+                            backgroundColor: Colors.black.withOpacity(0.3),
+                            color: Colors.amberAccent,
+                            fontFamily: 'monospace',
+                            fontSize: 18,
+                          ),
+                          codeblockDecoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
             ),
           ),
         ),
@@ -1026,5 +1149,58 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
         height: double.infinity,
       );
     }
+  }
+}
+
+class _TypingIndicator extends StatefulWidget {
+  const _TypingIndicator();
+
+  @override
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
+}
+
+class _TypingIndicatorState extends State<_TypingIndicator> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (index) {
+            final double opacity = ((_controller.value * 3 - index).remainder(3) / 3).clamp(0.2, 1.0);
+            return Container(
+              width: 5,
+              height: 5,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(opacity),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: Colors.white.withOpacity(opacity * 0.5), blurRadius: 4, spreadRadius: 1)
+                ],
+              ),
+            );
+          }),
+        );
+      },
+    );
   }
 }

@@ -21,7 +21,8 @@ class MascotController extends ChangeNotifier {
 
   Future<void> init() async {
     await _loadSettings();
-    // 不再在此处调用 _initModel()，避免启动时进行 GB 级别的磁盘拷贝导致卡顿
+    await _initModel();
+    _ttsService.isPlayingNotifier.addListener(_onTtsStatusChanged);
   }
 
   MascotDisplayMode _mode = MascotDisplayMode.docked;
@@ -88,6 +89,32 @@ class MascotController extends ChangeNotifier {
   bool _isAudioGenerating = false;
   bool get isAudioGenerating => _isAudioGenerating;
 
+  // TTS 参数
+  String _ttsRate = "+0%";
+  String _ttsVolume = "+0%";
+  String _ttsPitch = "+0Hz";
+
+  String get ttsRate => _ttsRate;
+  String get ttsVolume => _ttsVolume;
+  String get ttsPitch => _ttsPitch;
+
+  Future<void> updateTtsParams({String? rate, String? volume, String? pitch}) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (rate != null) {
+      _ttsRate = rate;
+      await prefs.setString('tts_rate', rate);
+    }
+    if (volume != null) {
+      _ttsVolume = volume;
+      await prefs.setString('tts_volume', volume);
+    }
+    if (pitch != null) {
+      _ttsPitch = pitch;
+      await prefs.setString('tts_pitch', pitch);
+    }
+    notifyListeners();
+  }
+
   List<Uint8List> _audioSegments = [];
 
   bool _isTalking = false;
@@ -115,7 +142,6 @@ class MascotController extends ChangeNotifier {
       // 切换模式时，如果是切到聊天且没有初始化，可以在这里或者发送时初始化
       if (mode == MascotAssistantMode.chat) {
         _helpText = "";
-        _ttsService.isPlayingNotifier.addListener(_onTtsStatusChanged);
         _initChatSession();
       } else {
         _closeChatSession();
@@ -132,6 +158,9 @@ class MascotController extends ChangeNotifier {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     _selectedModelPath = prefs.getString('mascot_selected_model');
+    _ttsRate = prefs.getString('tts_rate') ?? "+0%";
+    _ttsVolume = prefs.getString('tts_volume') ?? "+0%";
+    _ttsPitch = prefs.getString('tts_pitch') ?? "+0Hz";
     await _refreshAvailableModels();
     notifyListeners();
   }
@@ -300,7 +329,7 @@ Ciallo～(∠・ω< )⌒☆你选择了这部分内容:\n
     if (helpText.isEmpty || _isGenerating) return;
     _isGenerating = true;
     final content = _helpText;
-    _currentDialogueText = LOADING_TEXT;
+    _currentDialogueText = ""; // 清空文字，触发 UI 思考动画
     notifyListeners();
 
     await _initModel();
@@ -425,7 +454,13 @@ Ciallo～(∠・ω< )⌒☆你选择了这部分内容:\n
         voiceName = 'en-US-AriaNeural';
       }
 
-      final bytes = await _ttsService.getAudioBytes(cleanText, voiceName: voiceName);
+      final bytes = await _ttsService.getAudioBytes(
+        cleanText, 
+        voiceName: voiceName,
+        rate: _ttsRate,
+        volume: _ttsVolume,
+        pitch: _ttsPitch,
+      );
       if (bytes != null) {
         _ttsService.enqueueAndPlay(bytes);
         _audioSegments.add(bytes);
@@ -444,7 +479,8 @@ Ciallo～(∠・ω< )⌒☆你选择了这部分内容:\n
   // 清洗文本：移除 Emoji 和特殊图案字符
   String _cleanTextForTts(String text) {
     // 移除大部分 Emoji 和特殊符号，只保留文字、数字和基础标点
-    return text.replaceAll(RegExp(r'[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E6}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1F018}-\u{1F093}\u{1F004}\u{1F191}-\u{1F251}]', unicode: true), '')
+    return text.replaceAll(RegExp(r'[\u2600-\u27BF]'), '')
+               .replaceAll(RegExp(r'[\uD800-\uDBFF][\uDC00-\uDFFF]'), '') // 移除 UTF-16 代理对（大部分 Emoji）
                .replaceAll(RegExp(r'[*_#`~>\[\]]'), '') // 移除常见 Markdown 符号
                .trim();
   }
@@ -513,22 +549,46 @@ Ciallo～(∠・ω< )⌒☆你选择了这部分内容:\n
     if (RegExp(r'[ぁ-んァ-ン]').hasMatch(_helpText)) {
       voice = 'ja-JP-NanamiNeural';
     }
-    await _ttsService.speak(_helpText, voiceName: voice);
+    await _ttsService.speak(
+      _helpText, 
+      voiceName: voice,
+      rate: _ttsRate,
+      volume: _ttsVolume,
+      pitch: _ttsPitch,
+    );
+  }
+
+  Future<void> stopSpeaking() async {
+    await _ttsService.stop();
+    notifyListeners();
   }
 
   Future<void> speak(String text) async {
+    _currentDialogueText = text;
+    String cleanText = _cleanTextForTts(text);
+    if (cleanText.isEmpty) return;
+
     String voice = 'zh-CN-XiaoxiaoNeural';
     if (RegExp(r'[ぁ-んァ-ン]').hasMatch(text)) {
       voice = 'ja-JP-NanamiNeural';
+    } else if (RegExp(r'[a-zA-Z]').hasMatch(text) && !RegExp(r'[\u4e00-\u9fa5]').hasMatch(text)) {
+      voice = 'en-US-AriaNeural';
     }
-    await _ttsService.speak(text, voiceName: voice);
+    notifyListeners();
+    await _ttsService.speak(
+      cleanText,
+      voiceName: voice,
+      rate: _ttsRate,
+      volume: _ttsVolume,
+      pitch: _ttsPitch,
+    );
   }
 
   Future<void> analyzeGrammar() async {
     if (helpText.isEmpty || _isGenerating) return;
     _isGenerating = true;
     final content = _helpText;
-    _currentDialogueText = LOADING_TEXT;
+    _currentDialogueText = ""; // 清空文字，触发 UI 思考动画
     notifyListeners();
 
     await _initModel();

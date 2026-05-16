@@ -22,7 +22,6 @@ class FullDuplexChatPage extends StatefulWidget {
 class _FullDuplexChatPageState extends State<FullDuplexChatPage> with SingleTickerProviderStateMixin {
   final AudioRecorder _recorder = AudioRecorder();
   final GemmaSkill _gemmaSkill = GemmaSkill();
-  final EdgeTtsService _ttsService = EdgeTtsService();
   
   InferenceModelSession? _chatSession; // 持久化会话以支持多轮对话
   
@@ -56,7 +55,6 @@ class _FullDuplexChatPageState extends State<FullDuplexChatPage> with SingleTick
     _vadPoller?.cancel();
     _recorder.dispose();
     _gemmaSkill.close();
-    _ttsService.dispose();
     _pulseController.dispose();
     super.dispose();
   }
@@ -74,7 +72,7 @@ class _FullDuplexChatPageState extends State<FullDuplexChatPage> with SingleTick
     await _chatSession?.close();
     _chatSession = null;
 
-    await _ttsService.stop();
+    await MascotController().stopSpeaking();
   }
 
   Future<void> _toggleConversation() async {
@@ -107,7 +105,7 @@ class _FullDuplexChatPageState extends State<FullDuplexChatPage> with SingleTick
         topK: 64,
         topP: 0.95,
         enableAudioModality: true,
-        systemInstruction: "你是一个贴心的对话助手 Iris。请听用户的语音输入（中文），并用简洁的语言进行回应，保持对话自然流畅。直接输出你的回复内容，禁止输出任何动作描写。",
+        systemInstruction: "你是一个贴心的对话助手 Iris。请听用户的语音输入，并用简洁的语言进行回应，保持对话自然流畅。直接输出你的回复内容，禁止输出任何动作描写。",
       );
 
       setState(() {
@@ -198,7 +196,7 @@ class _FullDuplexChatPageState extends State<FullDuplexChatPage> with SingleTick
   Future<void> _interruptAI() async {
     debugPrint("VAD: !!! 打断 AI !!!");
     await _chatSession?.stopGeneration(); // 停止生成但保留会话历史
-    await _ttsService.stop();
+    await MascotController().stopSpeaking();
 
     if (mounted) {
       setState(() {
@@ -206,7 +204,8 @@ class _FullDuplexChatPageState extends State<FullDuplexChatPage> with SingleTick
         _displayText = "正在聆听 (已打断)...";
       });
     }
-    await _startNewRecording();
+    // 注意：这里不再重新调用 _startNewRecording()，
+    // 因为在 _processUserSpeech 开始思考时已经启动了录音，我们希望继续使用那个录音来捕捉打断的内容。
   }
 
   Future<void> _processUserSpeech() async {
@@ -234,6 +233,9 @@ class _FullDuplexChatPageState extends State<FullDuplexChatPage> with SingleTick
         _displayText = "Iris 正在思考...";
         _aiResponseText = "";
       });
+
+      // 重要：在思考阶段也开启录音，以便 VAD 能够检测到打断
+      await _startNewRecording();
 
       final Uint8List rawBytes = await file.readAsBytes();
       final processedBytes = _processAudioData(rawBytes);
@@ -263,10 +265,12 @@ class _FullDuplexChatPageState extends State<FullDuplexChatPage> with SingleTick
 
       if (fullResponse.isNotEmpty && _state == FullDuplexState.speaking) {
         await _startNewRecording();
-        final bytes = await _ttsService.getAudioBytes(fullResponse, voiceName: 'ja-JP-NanamiNeural');
-        if (bytes != null && _state == FullDuplexState.speaking) {
-          await _ttsService.playSegments([bytes]);
-        }
+        // final bytes = await _ttsService.getAudioBytes(fullResponse, voiceName: 'ja-JP-NanamiNeural');
+        // if (bytes != null && _state == FullDuplexState.speaking) {
+        //   await _ttsService.playSegments([bytes]);
+        // }
+        print("音频播放");
+        await MascotController().speak(fullResponse);
       }
     } catch (e) {
       debugPrint("VAD: 处理异常: $e");

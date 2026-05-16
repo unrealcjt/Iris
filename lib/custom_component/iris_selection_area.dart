@@ -41,6 +41,27 @@ class IrisSelectionArea extends StatelessWidget {
           },
         ));
 
+        buttonItems.insert(1, ContextMenuButtonItem(
+          label: 'Iris朗读',
+          onPressed: () async {
+            selectableRegionState.copySelection(SelectionChangedCause.toolbar);
+            selectableRegionState.hideToolbar();
+            await Future.delayed(const Duration(milliseconds: 100));
+            final data = await Clipboard.getData(Clipboard.kTextPlain);
+            final selectedText = data?.text;
+
+            if (selectedText != null && selectedText.isNotEmpty) {
+              // --- 核心修改：触发回调 ---
+              if (onActionSelected != null) {
+                onActionSelected!(selectedText);
+              }
+
+              // 如果你希望使用了回调就不用全局 MascotController，可以把下面这行删掉
+              MascotController().speak(selectedText);
+            }
+          },
+        ));
+
         // 4. 返回适配当前平台的工具栏
         return AdaptiveTextSelectionToolbar.buttonItems(
           anchors: selectableRegionState.contextMenuAnchors,

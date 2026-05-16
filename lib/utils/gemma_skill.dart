@@ -115,6 +115,24 @@ class GemmaSkill {
     );
   }
 
+  /// 看图识物标记
+  Stream<String> recognizeMarkObject({required Uint8List imageBytes}) {
+    return _generate(
+      prompt: """
+Please identify the main objects in following picture and mark the center positions of the objects with coordinates. Please use Japanese object name.
+format:
+[
+  {
+    "label": "object name",
+    "position": [pos_x, pos_y]
+  },
+  and then other objects
+]
+""",
+      imageBytes: imageBytes,
+    );
+  }
+
   /// 文化解析
   Stream<String> cultureResolve({required String res}) {
     return _generate(

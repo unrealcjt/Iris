@@ -412,24 +412,30 @@ $styleInstruction
     }
     setState(() {
       _messages.add(userMsg);
-      _messages.add(Message.text(text: "", isUser: false));
       _isGenerating = true;
     });
     
-    final msgIndex = _messages.length - 1;
-    _isAudioGenerating[msgIndex] = true;
-    _messageAudioSegments[msgIndex] = [];
     _scrollToBottom();
+
+    String fullResponse = "";
+    String buffer = "";
+    int? msgIndex;
 
     try {
       await _chatSession!.addQueryChunk(userMsg);
       final stream = _chatSession!.generateChatResponseAsync();
       
-      String fullResponse = "";
-      String buffer = "";
-      
       await for (final response in stream) {
         if (response is TextResponse) {
+          if (msgIndex == null) {
+            setState(() {
+              _messages.add(Message.text(text: "", isUser: false));
+              msgIndex = _messages.length - 1;
+              _isAudioGenerating[msgIndex!] = true;
+              _messageAudioSegments[msgIndex!] = [];
+            });
+          }
+          
           fullResponse += response.token;
           buffer += response.token;
 
@@ -438,34 +444,39 @@ $styleInstruction
           if (lastPunc != -1) {
             String sentence = buffer.substring(0, lastPunc + 1);
             buffer = buffer.substring(lastPunc + 1);
-            _pushTtsSentence(msgIndex, sentence);
+            _pushTtsSentence(msgIndex!, sentence);
           }
 
           setState(() {
-            _messages[msgIndex] = Message.text(text: fullResponse, isUser: false);
+            _messages[msgIndex!] = Message.text(text: fullResponse, isUser: false);
           });
           _scrollToBottom();
         }
       }
 
-      if (buffer.trim().isNotEmpty) {
-        _pushTtsSentence(msgIndex, buffer);
+      if (buffer.trim().isNotEmpty && msgIndex != null) {
+        _pushTtsSentence(msgIndex!, buffer);
       }
 
       // 等待该消息的所有音频生成任务完成
-      while (_activeTtsTasks.contains(msgIndex) || (_ttsQueue[msgIndex]?.isNotEmpty ?? false)) {
-        await Future.delayed(const Duration(milliseconds: 100));
+      if (msgIndex != null) {
+        while (_activeTtsTasks.contains(msgIndex!) || (_ttsQueue[msgIndex!]?.isNotEmpty ?? false)) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
       }
 
     } catch (e) {
-      setState(() {
-        _messages[msgIndex] = Message.text(text: "错误: $e", isUser: false);
-      });
+      if (msgIndex != null) {
+        setState(() {
+          _messages[msgIndex!] = Message.text(text: "错误: $e", isUser: false);
+        });
+      }
     } finally {
       setState(() {
         _isGenerating = false;
-        _isAudioGenerating[msgIndex] = false;
-
+        if (msgIndex != null) {
+          _isAudioGenerating[msgIndex!] = false;
+        }
       });
     }
   }
@@ -1260,11 +1271,17 @@ $styleInstruction
   }
 
   Widget _buildMessageList() {
+    final bool showThinking = _isGenerating && 
+        (_messages.isEmpty || _messages.last.isUser);
+
     Widget list = ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: _messages.length,
+      itemCount: _messages.length + (showThinking ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == _messages.length) {
+          return _buildWaitingBubble();
+        }
         final msg = _messages[index];
         return _buildMessageBubble(msg, index);
       },
@@ -1395,6 +1412,45 @@ $styleInstruction
     }
   }
 
+  Widget _buildWaitingBubble() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildAvatar(Icons.bolt, colorScheme.primary, path: "assets/img/Iris_female.png"),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(20).copyWith(
+                bottomLeft: const Radius.circular(0),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const _TypingIndicator(),
+                const SizedBox(width: 8),
+                Text(
+                  "Iris 正在思考...",
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInputArea(ColorScheme colorScheme) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1433,6 +1489,57 @@ $styleInstruction
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TypingIndicator extends StatefulWidget {
+  const _TypingIndicator();
+
+  @override
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
+}
+
+class _TypingIndicatorState extends State<_TypingIndicator> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (index) {
+            final double opacity = ((_controller.value * 3 - index).remainder(3) / 3).clamp(0.2, 1.0);
+            return Container(
+              width: 4,
+              height: 4,
+              margin: const EdgeInsets.symmetric(horizontal: 1),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(opacity),
+                shape: BoxShape.circle,
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

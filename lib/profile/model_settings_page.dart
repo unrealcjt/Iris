@@ -194,6 +194,11 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
               padding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               child: Divider(),
             ),
+            _buildTtsSettings(colorScheme, isDark),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              child: Divider(),
+            ),
             MascotController().availableModels.isEmpty
                 ? SizedBox(
                     height: 300,
@@ -403,6 +408,103 @@ class _ModelSettingsPageState extends State<ModelSettingsPage> {
         );
       },
     );
+  }
+
+  Widget _buildTtsSettings(ColorScheme colorScheme, bool isDark) {
+    final mascot = MascotController();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[900] : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: colorScheme.primary.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.record_voice_over_rounded, color: colorScheme.primary),
+              const SizedBox(width: 12),
+              const Text(
+                '语音参数 (Edge TTS)',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _buildParamSlider(
+            label: '语速 (Rate)',
+            value: _parseTtsValue(mascot.ttsRate),
+            onChanged: (val) {
+              mascot.updateTtsParams(rate: _formatTtsValue(val, suffix: "%"));
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildParamSlider(
+            label: '音量 (Volume)',
+            value: _parseTtsValue(mascot.ttsVolume),
+            onChanged: (val) {
+              mascot.updateTtsParams(volume: _formatTtsValue(val, suffix: "%"));
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildParamSlider(
+            label: '音高 (Pitch)',
+            value: _parseTtsValue(mascot.ttsPitch),
+            onChanged: (val) {
+              mascot.updateTtsParams(pitch: _formatTtsValue(val, suffix: "Hz"));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParamSlider({
+    required String label,
+    required double value,
+    required ValueChanged<double> onChanged,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            Text(
+              value >= 0 ? "+${value.toInt()}" : value.toInt().toString(),
+              style: TextStyle(fontSize: 14, color: colorScheme.primary, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        Slider(
+          value: value,
+          min: -100,
+          max: 100,
+          divisions: 200,
+          label: value.toInt().toString(),
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+
+  double _parseTtsValue(String raw) {
+    final match = RegExp(r'([+-]?\d+)').firstMatch(raw);
+    if (match != null) {
+      return double.tryParse(match.group(1)!) ?? 0;
+    }
+    return 0;
+  }
+
+  String _formatTtsValue(double value, {required String suffix}) {
+    final valInt = value.toInt();
+    final prefix = valInt >= 0 ? "+" : "";
+    return "$prefix$valInt$suffix";
   }
 
   void _showDeleteDialog(File file) {

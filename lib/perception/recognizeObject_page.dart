@@ -1,8 +1,17 @@
+import 'dart:convert';
+import 'dart:ui' as ui;
+import 'package:Iris/custom_component/iris_selection_area.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:Iris/utils/gemma_skill.dart';
 import 'vision_common.dart';
+
+class MarkedObject {
+  final String label;
+  final Offset position;
+  MarkedObject({required this.label, required this.position});
+}
 
 class RecognizeObjectPage extends StatefulWidget {
   const RecognizeObjectPage({super.key});
@@ -15,6 +24,8 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
   final GemmaSkill _gemmaSkill = GemmaSkill();
   
   List<String> _recognizedItems = [];
+  List<MarkedObject> _markedObjects = [];
+  ui.Image? _decodedImage;
   final Map<String, String> _itemCultures = {};
   final Set<String> _checkedItems = {};
   final Set<String> _completedItems = {};
@@ -32,6 +43,8 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
     super.reset();
     setState(() {
       _recognizedItems = [];
+      _markedObjects = [];
+      _decodedImage = null;
       _itemCultures.clear();
       _checkedItems.clear();
       _completedItems.clear();
@@ -58,7 +71,13 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
         enableVision: true,
       );
 
-      final stream = _gemmaSkill.recognizeObject(imageBytes: imageBytes!);
+      if (imageBytes != null) {
+        final codec = await ui.instantiateImageCodec(imageBytes!);
+        final frame = await codec.getNextFrame();
+        _decodedImage = frame.image;
+      }
+
+      final stream = _gemmaSkill.recognizeMarkObject(imageBytes: imageBytes!);
       await for (final chunk in stream) {
         setState(() {
           resultText += chunk;
@@ -80,15 +99,42 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
 
   void _parseItems() {
     if (resultText.isEmpty) return;
+    
+    try {
+      final start = resultText.indexOf('[');
+      final end = resultText.lastIndexOf(']');
+      if (start != -1 && end != -1 && end >= start) {
+        final jsonStr = resultText.substring(start, end + 1);
+        final List<dynamic> data = json.decode(jsonStr);
+        _markedObjects = data.map((e) {
+          final label = e['label'] as String;
+          final pos = e['position'] as List<dynamic>;
+          return MarkedObject(
+            label: label,
+            position: Offset(pos[0].toDouble(), pos[1].toDouble()),
+          );
+        }).toList();
+        _recognizedItems = _markedObjects.map((e) => e.label).toList();
+      } else {
+        _parseFallback();
+      }
+    } catch (e) {
+      debugPrint("Parsing failed: $e");
+      _parseFallback();
+    }
+    
+    if (_recognizedItems.isNotEmpty) {
+      _activeItem = _recognizedItems.first;
+    }
+  }
+
+  void _parseFallback() {
     final rawItems = resultText.split(RegExp(r'[,，]'));
     _recognizedItems = rawItems
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-    
-    if (_recognizedItems.isNotEmpty) {
-      _activeItem = _recognizedItems.first;
-    }
+    _markedObjects = [];
   }
 
   Future<void> _executeResolving() async {
@@ -190,11 +236,7 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
             tag: 'selected_image',
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
-              child: Image.file(
-                imageFile!,
-                fit: BoxFit.contain,
-                width: double.infinity,
-              ),
+              child: _buildImageWithMarkers(colorScheme),
             ),
           ),
           const SizedBox(height: 16),
@@ -315,10 +357,12 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
                   else if (_itemCultures[_activeItem] == null || (_itemCultures[_activeItem]!.isEmpty && _isResolving))
                     const Center(child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator()))
                   else
-                    MarkdownBody(
-                      data: _itemCultures[_activeItem]!,
-                      styleSheet: MarkdownStyleSheet(
-                        p: TextStyle(fontSize: 16, height: 1.6, color: colorScheme.onSurface),
+                    IrisSelectionArea(
+                      child: MarkdownBody(
+                        data: _itemCultures[_activeItem]!,
+                        styleSheet: MarkdownStyleSheet(
+                          p: TextStyle(fontSize: 16, height: 1.6, color: colorScheme.onSurface),
+                        ),
                       ),
                     ),
                 ],
@@ -342,6 +386,78 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildImageWithMarkers(ColorScheme colorScheme) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (_decodedImage == null) {
+          return Image.file(
+            imageFile!,
+            fit: BoxFit.contain,
+            width: double.infinity,
+          );
+        }
+
+        final double viewWidth = constraints.maxWidth;
+        final double imgWidth = _decodedImage!.width.toDouble();
+        final double imgHeight = _decodedImage!.height.toDouble();
+        final double viewHeight = viewWidth * (imgHeight / imgWidth);
+
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Image.file(
+              imageFile!,
+              fit: BoxFit.contain,
+              width: viewWidth,
+              height: viewHeight,
+            ),
+            ..._markedObjects.map((obj) {
+              final x = (obj.position.dx / 1000) * viewWidth;
+              final y = (obj.position.dy / 1000) * viewHeight;
+
+              return Positioned(
+                left: x,
+                top: y,
+                child: FractionalTranslation(
+                  translation: const Offset(-0.5, -0.5),
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() => _activeItem = obj.label);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: (_activeItem == obj.label) 
+                            ? colorScheme.primary 
+                            : colorScheme.secondary.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.3),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        obj.label,
+                        style: const TextStyle(
+                          color: Colors.white, 
+                          fontSize: 12, 
+                          fontWeight: FontWeight.bold
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
+      },
     );
   }
 }

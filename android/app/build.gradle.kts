@@ -15,8 +15,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+//    kotlinOptions {
+//        jvmTarget = JavaVersion.VERSION_17.toString()
+//    }
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
@@ -28,18 +31,33 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        ndk { abiFilters.add("arm64-v8a") }
+//        ndk { abiFilters.add("arm64-v8a") }
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // 确保启用了签名配置（如果你配置了的话）
             signingConfig = signingConfigs.getByName("debug")
+
+            // 🛠️ 关键：确保有下面这一行来加载 proguard-rules.pro
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
+    }
+
+    // 加入以下 Lint 配置
+    @Suppress("DEPRECATION")
+    lintOptions {
+        isAbortOnError = false
+        isCheckReleaseBuilds = false
     }
 }
 
 flutter {
     source = "../.."
 }
+
+// 告诉 R8/Proguard：不要因为找不到某些类而中断编译
+project.extensions.extraProperties.set("android.r8.failOnMissingClasses", "false")

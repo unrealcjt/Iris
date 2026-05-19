@@ -26,6 +26,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
   bool _isModelSelectionOpen = false; // 用于控制模型选择界面的显示
   bool _isLanguageSelectionOpen = false; // 用于控制翻译语言选择界面的显示
   bool _isTextInputOpen = false; // 用于控制翻译文本输入界面的显示
+  bool _isAgentInputOpen = false; // 用于控制 Agent 输入界面的显示
   bool _isActionMenuOpen = false; // 用于控制功能集菜单的展开
 
   @override
@@ -71,6 +72,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
       _isModelSelectionOpen = false;
       _isLanguageSelectionOpen = false;
       _isTextInputOpen = false;
+      _isAgentInputOpen = false;
       _isActionMenuOpen = false;
       _translateInputController.clear();
     }
@@ -291,6 +293,9 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
 
                                 // 文本输入遮罩层
                                 if (_isTextInputOpen) _buildTextInputOverlay(),
+
+                                // Agent 输入遮罩层
+                                if (_isAgentInputOpen) _buildAgentInputOverlay(),
                               ],
                             ),
                           );
@@ -461,6 +466,14 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                               }),
                             ),
                             const SizedBox(width: 12),
+                            _buildSubAction(
+                              icon: Icons.support_agent_rounded, 
+                              label: "Agent", 
+                              onTap: () => _handleAction(() {
+                                setState(() => _isAgentInputOpen = true);
+                              }),
+                            ),
+                            const SizedBox(width: 12),
                           ],
                         ),
                       ),
@@ -570,6 +583,79 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                       }
                     },
                     child: const Text("确定"),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAgentInputOverlay() {
+    return Container(
+      color: Colors.black87,
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 30),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.grey[900],
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.support_agent_rounded, color: Colors.pinkAccent),
+                  SizedBox(width: 8),
+                  Text("发送指令给 Iris Agent", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _translateInputController,
+                autofocus: true,
+                maxLines: 3,
+                minLines: 1,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: "例如：帮我把'猫'添加到生词本并读一下",
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.05),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      setState(() => _isAgentInputOpen = false);
+                      _translateInputController.clear();
+                    },
+                    child: const Text("取消"),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.pinkAccent,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () {
+                      final text = _translateInputController.text.trim();
+                      if (text.isNotEmpty) {
+                        setState(() => _isAgentInputOpen = false);
+                        _controller.runAgentTask(text);
+                        _translateInputController.clear();
+                      }
+                    },
+                    child: const Text("执行任务"),
                   ),
                 ],
               ),
@@ -706,6 +792,34 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                 label: "音高",
                 value: _parseTtsValue(_controller.ttsPitch),
                 onChanged: (v) => _controller.updateTtsParams(pitch: _formatTtsValue(v, suffix: "Hz")),
+              ),
+              const Divider(color: Colors.white10, height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("运行模式", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: DropdownButton<bool>(
+                      value: _controller.isThinkingMode,
+                      dropdownColor: Colors.grey[900],
+                      underline: const SizedBox(),
+                      style: const TextStyle(color: Colors.pinkAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                      items: const [
+                        DropdownMenuItem(value: false, child: Text("快速模式")),
+                        DropdownMenuItem(value: true, child: Text("思考模式")),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) _controller.setThinkingMode(val);
+                      },
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               SizedBox(
@@ -959,32 +1073,73 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                     )
                   :
                     IrisSelectionArea(
-                      child: MarkdownBody(
-                        data: _controller.currentDialogueText,
-                        styleSheet: MarkdownStyleSheet(
-                          p: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            height: 1.6,
-                            shadows: [Shadow(color: Colors.black, blurRadius: 2)],
-                          ),
-                          code: TextStyle(
-                            backgroundColor: Colors.black.withOpacity(0.3),
-                            color: Colors.amberAccent,
-                            fontFamily: 'monospace',
-                            fontSize: 18,
-                          ),
-                          codeblockDecoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _buildDialogueContent(_controller.currentDialogueText, colorScheme),
                       ),
                     ),
             ),
           ),
         ),
       ],
+    );
+  }
+
+  /// 将对话内容拆分为思考部分和回答部分
+  List<Widget> _buildDialogueContent(String raw, ColorScheme colorScheme) {
+    if (!raw.contains("<think>")) {
+      return [
+        MarkdownBody(
+          data: raw,
+          styleSheet: _getMarkdownStyleSheet(colorScheme),
+        )
+      ];
+    }
+
+    final regExp = RegExp(r'<think>([\s\S]*?)<\/think>');
+    final match = regExp.firstMatch(raw);
+    
+    if (match == null) {
+      return [
+        MarkdownBody(
+          data: raw,
+          styleSheet: _getMarkdownStyleSheet(colorScheme),
+        )
+      ];
+    }
+
+    final thinking = match.group(1)?.trim() ?? "";
+    final answer = raw.replaceFirst(match.group(0)!, "").trim();
+
+    return [
+      if (thinking.isNotEmpty)
+        _ThinkingBlock(thinking: thinking),
+      if (answer.isNotEmpty)
+        MarkdownBody(
+          data: answer,
+          styleSheet: _getMarkdownStyleSheet(colorScheme),
+        ),
+    ];
+  }
+
+  MarkdownStyleSheet _getMarkdownStyleSheet(ColorScheme colorScheme) {
+    return MarkdownStyleSheet(
+      p: const TextStyle(
+        color: Colors.white,
+        fontSize: 16,
+        height: 1.6,
+        shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+      ),
+      code: TextStyle(
+        backgroundColor: Colors.black.withOpacity(0.3),
+        color: Colors.amberAccent,
+        fontFamily: 'monospace',
+        fontSize: 18,
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+      ),
     );
   }
 
@@ -1021,7 +1176,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: _handleSend,
+              onTap: _controller.isGenerating ? _controller.stopSkillReply : _handleSend,
               child: Container(
                 width: 48,
                 height: 48,
@@ -1030,7 +1185,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                   shape: BoxShape.circle,
                 ),
                 child: _controller.isGenerating
-                    ? const Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
+                    ? const _BlinkingPauseIcon()
                     : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
               ),
             ),
@@ -1058,49 +1213,33 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
           const Divider(color: Colors.white12),
           Expanded(
             child: ListView.builder(
-              itemCount: _controller.chatMessages.length,
-              itemBuilder: (context, index) {
-                final msg = _controller.chatMessages[index];
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12.0),
-                  child: Column(
-                    crossAxisAlignment: msg.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                    children: [
-                      Text(msg.isUser ? "You" : "Iris", 
-                        style: TextStyle(color: msg.isUser ? Colors.white38 : colorScheme.primary, fontSize: 11, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: msg.isUser ? colorScheme.primary.withOpacity(0.2) : Colors.white.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white10),
-                        ),
-                        child: MarkdownBody(
-                          data: msg.text ?? "",
-                          styleSheet: MarkdownStyleSheet(
-                            p: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              height: 1.6,
-                              shadows: [Shadow(color: Colors.black, blurRadius: 2)],
-                            ),
-                            code: TextStyle(
-                              backgroundColor: Colors.black.withOpacity(0.3),
-                              color: Colors.amberAccent,
-                              fontFamily: 'monospace',
-                            ),
-                            codeblockDecoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                      itemCount: _controller.chatMessages.length,
+                      itemBuilder: (context, index) {
+                        final msg = _controller.chatMessages[index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12.0),
+                          child: Column(
+                            crossAxisAlignment: msg.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                            children: [
+                              Text(msg.isUser ? "You" : "Iris", 
+                                style: TextStyle(color: msg.isUser ? Colors.white38 : colorScheme.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: msg.isUser ? colorScheme.primary.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: Colors.white10),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: _buildDialogueContent(msg.text ?? "", colorScheme),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                        );
+                      },
             ),
           ),
         ],
@@ -1149,6 +1288,108 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
         height: double.infinity,
       );
     }
+  }
+}
+
+class _ThinkingBlock extends StatefulWidget {
+  final String thinking;
+  const _ThinkingBlock({required this.thinking});
+
+  @override
+  State<_ThinkingBlock> createState() => _ThinkingBlockState();
+}
+
+class _ThinkingBlockState extends State<_ThinkingBlock> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _isExpanded = !_isExpanded),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.psychology_outlined, size: 16, color: Colors.pinkAccent),
+                const SizedBox(width: 8),
+                const Text(
+                  "Iris 正在思考...",
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  _isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  size: 16,
+                  color: Colors.white38,
+                ),
+              ],
+            ),
+          ),
+          if (_isExpanded) ...[
+            const SizedBox(height: 8),
+            const Divider(color: Colors.white10, height: 1),
+            const SizedBox(height: 8),
+            Text(
+              widget.thinking,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.6),
+                fontSize: 13,
+                height: 1.5,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BlinkingPauseIcon extends StatefulWidget {
+  const _BlinkingPauseIcon();
+
+  @override
+  State<_BlinkingPauseIcon> createState() => _BlinkingPauseIconState();
+}
+
+class _BlinkingPauseIconState extends State<_BlinkingPauseIcon> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _controller,
+      child: const Icon(Icons.pause_rounded, color: Colors.white, size: 24),
+    );
   }
 }
 

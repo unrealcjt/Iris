@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:Iris/iris_assistant/mascot_controller.dart';
+import 'package:Iris/iris_assistant/iris_tools.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:path/path.dart' as p;
@@ -91,22 +92,7 @@ class _ChatPageState extends State<ChatPage> {
           modelType: ModelType.gemma4,
           supportsFunctionCalls: true,
           systemInstruction: "你是一个名为 Iris 的助理。请使用 'speak' 工具来回答用户。请在一次回复中同时完成工具调用和对应的文字输出。收到工具执行成功的反馈后，请直接结束对话，不要重复调用工具。",
-          tools: [
-            const Tool(
-              name: 'speak',
-              description: '将回复文本转换为语音播放给用户听。',
-              parameters: {
-                'type': 'object',
-                'properties': {
-                  'text': {
-                    'type': 'string',
-                    'description': '需要播放的文本内容',
-                  },
-                },
-                'required': ['text'],
-              },
-            ),
-          ],
+          tools: IrisTools.all,
         );
       }
 

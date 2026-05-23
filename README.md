@@ -27,5 +27,5 @@ https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm
 
 App接入Jmdict日语词典，位置应该位于assets目录下，可自行下载https://github.com/seanmcbroom/JMdictSQLite 最新版本
 
-如果需要直接使用，请下载 [Release](https://github.com/unrealcjt/Iris/releases/latest) 版本。
+如果需要直接使用，请下载 [Release](https://github.com/unrealcjt/Iris/releases/latest/download/app-arm64-v8a-release.apk) 版本。
 

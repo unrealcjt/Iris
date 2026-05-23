@@ -1,6 +1,7 @@
 import 'package:Iris/practice/search_result_screen.dart';
 import 'package:Iris/practice/trial_page.dart';
 import 'package:Iris/practice/vocabulary_list_page.dart';
+import 'package:Iris/practice/grammar_list_page.dart';
 import 'package:Iris/utils/wa_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,17 +19,19 @@ class _PracticePageState extends State<PracticePage> {
   final TextEditingController _searchController = TextEditingController();
   final DictionaryService _dictService = DictionaryService();
   bool _isBookCreated = false;
+  bool _isGrammarBookCreated = false;
 
   @override
   void initState() {
     super.initState();
-    _checkBookStatus();
+    _checkStatus();
   }
 
-  Future<void> _checkBookStatus() async {
+  Future<void> _checkStatus() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _isBookCreated = prefs.getBool('isVocabularyBookCreated') ?? false;
+      _isGrammarBookCreated = prefs.getBool('isGrammarBookCreated') ?? false;
     });
   }
 
@@ -37,6 +40,14 @@ class _PracticePageState extends State<PracticePage> {
     await prefs.setBool('isVocabularyBookCreated', true);
     setState(() {
       _isBookCreated = true;
+    });
+  }
+
+  Future<void> _createGrammarBook() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isGrammarBookCreated', true);
+    setState(() {
+      _isGrammarBookCreated = true;
     });
   }
 
@@ -87,7 +98,7 @@ class _PracticePageState extends State<PracticePage> {
                   
                   // 生词修习
                   if (!_isBookCreated)
-                    _buildCreateBookCard(context)
+                    _buildCreateBookCard(context, '尚未创建生词本', '创建一个日语生词本，开始你的语言修行之旅', _createBook)
                   else
                     _buildModuleCard(
                       context: context,
@@ -99,6 +110,25 @@ class _PracticePageState extends State<PracticePage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const VocabularyListPage()),
+                        );
+                      },
+                    ),
+                  const SizedBox(height: 16),
+
+                  // 文法录
+                  if (!_isGrammarBookCreated)
+                    _buildCreateBookCard(context, '尚未创建文法录', '记录并管理你的日语语法，构建完整的知识体系', _createGrammarBook)
+                  else
+                    _buildModuleCard(
+                      context: context,
+                      title: '文法录',
+                      subtitle: '条分缕析，掌握日语核心语法',
+                      icon: Icons.history_edu_rounded,
+                      color: Colors.teal,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const GrammarListPage()),
                         );
                       },
                     ),
@@ -209,7 +239,7 @@ class _PracticePageState extends State<PracticePage> {
     );
   }
 
-  Widget _buildCreateBookCard(BuildContext context) {
+  Widget _buildCreateBookCard(BuildContext context, String title, String subtitle, VoidCallback onCreate) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -224,19 +254,19 @@ class _PracticePageState extends State<PracticePage> {
         children: [
           const Icon(Icons.library_add_rounded, size: 48, color: Colors.blueAccent),
           const SizedBox(height: 16),
-          const Text(
-            '尚未创建生词本',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          const Text(
-            '创建一个日语生词本，开始你的语言修行之旅',
+          Text(
+            subtitle,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: Colors.grey),
+            style: const TextStyle(fontSize: 13, color: Colors.grey),
           ),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: _createBook,
+            onPressed: onCreate,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blueAccent,
               foregroundColor: Colors.white,

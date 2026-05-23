@@ -1,62 +1,35 @@
-import 'dart:io';
-import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'vocabulary_model.dart';
+import 'practice_database.dart';
 
 class VocabularyService {
-  Database? _db;
-
   static final VocabularyService _instance = VocabularyService._internal();
   factory VocabularyService() => _instance;
   VocabularyService._internal();
 
+  final PracticeDatabase _practiceDb = PracticeDatabase();
+
+  Future<Database> get _db async => await _practiceDb.database;
+
   Future<void> init() async {
-    if (_db != null) return;
-
-    String path;
-    if (Platform.isAndroid || Platform.isIOS) {
-      var databasesPath = await getDatabasesPath();
-      path = join(databasesPath, "vocabulary.sqlite");
-    } else {
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
-      path = join(Directory.current.path, 'vocabulary.sqlite');
-    }
-
-    _db = await openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE vocabulary (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            entSeq INTEGER,
-            word TEXT,
-            kana TEXT,
-            addTime TEXT,
-            familiarity INTEGER DEFAULT 0,
-            reviewTime TEXT,
-            note TEXT,
-            tags TEXT
-          )
-        ''');
-      },
-    );
+    await _db;
   }
 
   Future<int> addEntry(VocabularyEntry entry) async {
-    return await _db!.insert('vocabulary', entry.toMap());
+    final db = await _db;
+    return await db.insert('vocabulary', entry.toMap());
   }
 
   Future<List<VocabularyEntry>> getAllEntries() async {
-    final List<Map<String, dynamic>> maps = await _db!.query('vocabulary', orderBy: 'addTime DESC');
+    final db = await _db;
+    final List<Map<String, dynamic>> maps = await db.query('vocabulary', orderBy: 'addTime DESC');
     return maps.map((m) => VocabularyEntry.fromMap(m)).toList();
   }
 
   Future<List<VocabularyEntry>> getDueEntries() async {
     final now = DateTime.now().toIso8601String();
-    final List<Map<String, dynamic>> maps = await _db!.query(
+    final db = await _db;
+    final List<Map<String, dynamic>> maps = await db.query(
       'vocabulary',
       where: 'reviewTime <= ? AND familiarity > 0',
       whereArgs: [now],
@@ -66,7 +39,8 @@ class VocabularyService {
   }
 
   Future<List<VocabularyEntry>> getNewEntries(int limit) async {
-    final List<Map<String, dynamic>> maps = await _db!.query(
+    final db = await _db;
+    final List<Map<String, dynamic>> maps = await db.query(
       'vocabulary',
       where: 'familiarity = 0',
       limit: limit,
@@ -76,7 +50,8 @@ class VocabularyService {
   }
 
   Future<void> resetAllProgress() async {
-    await _db!.update(
+    final db = await _db;
+    await db.update(
       'vocabulary',
       {
         'familiarity': 0,
@@ -86,7 +61,8 @@ class VocabularyService {
   }
 
   Future<void> updateFamiliarity(int entSeq, int familiarity, DateTime nextReview) async {
-    await _db!.update(
+    final db = await _db;
+    await db.update(
       'vocabulary',
       {
         'familiarity': familiarity,
@@ -98,11 +74,13 @@ class VocabularyService {
   }
 
   Future<String> getDatabasePath() async {
-    return _db!.path;
+    final db = await _db;
+    return db.path;
   }
 
   Future<bool> isCollected(int entSeq) async {
-    final List<Map<String, dynamic>> maps = await _db!.query(
+    final db = await _db;
+    final List<Map<String, dynamic>> maps = await db.query(
       'vocabulary',
       where: 'entSeq = ?',
       whereArgs: [entSeq],
@@ -111,7 +89,8 @@ class VocabularyService {
   }
 
   Future<void> removeEntry(int entSeq) async {
-    await _db!.delete(
+    final db = await _db;
+    await db.delete(
       'vocabulary',
       where: 'entSeq = ?',
       whereArgs: [entSeq],

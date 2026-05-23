@@ -80,4 +80,65 @@ class PracticeDatabase {
       )
     ''');
   }
+
+  Future<Map<String, int>> importData(String externalDbPath) async {
+    Database externalDb = await openDatabase(externalDbPath);
+    Database currentDb = await database;
+
+    int vocabImported = 0;
+    int grammarImported = 0;
+
+    // Import Vocabulary
+    try {
+      List<Map<String, dynamic>> externalVocab = await externalDb.query('vocabulary');
+      if (externalVocab.isNotEmpty) {
+        await currentDb.transaction((txn) async {
+          // 获取当前所有已有的 entSeq 提高查询效率
+          final List<Map<String, dynamic>> existingRows = await txn.query('vocabulary', columns: ['entSeq']);
+          final Set<int> existingEntSeqs = existingRows.map((r) => r['entSeq'] as int).toSet();
+
+          for (var row in externalVocab) {
+            final entSeq = row['entSeq'] as int;
+            if (!existingEntSeqs.contains(entSeq)) {
+              Map<String, dynamic> toInsert = Map.from(row);
+              toInsert.remove('id'); // 让当前数据库分配新 ID
+              await txn.insert('vocabulary', toInsert);
+              vocabImported++;
+              existingEntSeqs.add(entSeq); // 防止导入文件中本身有重复
+            }
+          }
+        });
+      }
+    } catch (e) {
+      print("Error importing vocabulary: $e");
+    }
+
+    // Import Grammar
+    try {
+      List<Map<String, dynamic>> externalGrammar = await externalDb.query('grammar');
+      if (externalGrammar.isNotEmpty) {
+        await currentDb.transaction((txn) async {
+          // 获取现有文法进行去重判断
+          final List<Map<String, dynamic>> existingRows = await txn.query('grammar', columns: ['title', 'meaning']);
+          final Set<String> existingKeys = existingRows.map((r) => "${r['title']}_${r['meaning']}").toSet();
+
+          for (var row in externalGrammar) {
+            final String key = "${row['title']}_${row['meaning']}";
+            if (!existingKeys.contains(key)) {
+              Map<String, dynamic> toInsert = Map.from(row);
+              toInsert.remove('id');
+              await txn.insert('grammar', toInsert);
+              grammarImported++;
+              existingKeys.add(key);
+            }
+          }
+        });
+      }
+    } catch (e) {
+      print("Error importing grammar: $e");
+    }
+
+    await externalDb.close();
+    return {'vocabulary': vocabImported, 'grammar': grammarImported};
+  }
 }

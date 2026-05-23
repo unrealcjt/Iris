@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'vocabulary_service.dart';
 import 'vocabulary_model.dart';
+import 'practice_database.dart';
 import 'package:intl/intl.dart';
 import 'word_detail_page.dart';
 import 'vocabulary_flashcard_page.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:file_picker/file_picker.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,6 +22,7 @@ class _VocabularyListPageState extends State<VocabularyListPage> {
   final VocabularyService _vocabService = VocabularyService();
   List<VocabularyEntry> _entries = [];
   bool _isLoading = true;
+  bool _isImporting = false;
   int _newWordsLimit = 10;
 
   @override
@@ -101,16 +104,48 @@ class _VocabularyListPageState extends State<VocabularyListPage> {
         return;
       }
 
-      final fileName = "vocabulary_export_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.sqlite";
+      final fileName = "practice_export_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.sqlite";
       final exportPath = "${exportDir.path}/$fileName";
       await dbFile.copy(exportPath);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已导出到: $exportPath')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('数据库已成功导出到下载目录'), action: SnackBarAction(label: '查看路径', onPressed: () {
+          showDialog(context: context, builder: (context) => AlertDialog(title: const Text('导出路径'), content: SelectableText(exportPath)));
+        })));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('导出失败: $e')));
+      }
+    }
+  }
+
+  Future<void> _importDatabase() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        String path = result.files.single.path!;
+        
+        setState(() => _isImporting = true);
+
+        // 使用事务和批量处理优化导入速度
+        final counts = await PracticeDatabase().importData(path);
+        
+        if (mounted) {
+          await _loadEntries(); // 重新加载数据
+          setState(() => _isImporting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('导入完成：新增 ${counts['vocabulary']} 条生词，${counts['grammar']} 条文法')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isImporting = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('导入失败: $e')));
       }
     }
   }
@@ -181,108 +216,136 @@ class _VocabularyListPageState extends State<VocabularyListPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('生词本'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: '背词设置',
-            onPressed: _showSettingsDialog,
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            title: const Text('生词本'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                tooltip: '背词设置',
+                onPressed: _showSettingsDialog,
+              ),
+              IconButton(
+                icon: const Icon(Icons.history),
+                tooltip: '重置所有进度',
+                onPressed: _resetProgress,
+              ),
+              IconButton(
+                icon: const Icon(Icons.download),
+                tooltip: '导入数据库 (追加)',
+                onPressed: _isImporting ? null : _importDatabase,
+              ),
+              IconButton(
+                icon: const Icon(Icons.upload),
+                tooltip: '导出数据库',
+                onPressed: _exportDatabase,
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _loadEntries,
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: '重置所有进度',
-            onPressed: _resetProgress,
-          ),
-          IconButton(
-            icon: const Icon(Icons.import_export),
-            tooltip: '导出数据库',
-            onPressed: _exportDatabase,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadEntries,
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                if (_entries.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: ElevatedButton.icon(
-                      onPressed: _startReview,
-                      icon: const Icon(Icons.play_arrow),
-                      label: Text('开始背词试炼 (${_newWordsLimit}新词+复习)'),
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    if (_entries.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: ElevatedButton.icon(
+                          onPressed: _startReview,
+                          icon: const Icon(Icons.play_arrow),
+                          label: Text('开始背词试炼 (${_newWordsLimit}新词+复习)'),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 50),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-// ... rest of the ListView.builder remains same ...
-                Expanded(
-                  child: _entries.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          itemCount: _entries.length,
-                          itemBuilder: (context, index) {
-                            final entry = _entries[index];
-                            return Card(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: ListTile(
-                                title: Text(entry.word, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(entry.kana),
-                                    if (entry.note != null && entry.note!.isNotEmpty)
-                                      Text('备注: ${entry.note}', style: const TextStyle(fontStyle: FontStyle.italic)),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Expanded(
+                      child: _entries.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              itemCount: _entries.length,
+                              itemBuilder: (context, index) {
+                                final entry = _entries[index];
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  child: ListTile(
+                                    title: Text(entry.word, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                                    subtitle: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          '熟练度: ${entry.familiarity}',
-                                          style: TextStyle(fontSize: 12, color: Colors.blueGrey[700]),
-                                        ),
-                                        Text(
-                                          '添加于: ${DateFormat('yyyy-MM-dd HH:mm').format(entry.addTime)}',
-                                          style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                        Text(entry.kana),
+                                        if (entry.note != null && entry.note!.isNotEmpty)
+                                          Text('备注: ${entry.note}', style: const TextStyle(fontStyle: FontStyle.italic)),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              '熟练度: ${entry.familiarity}',
+                                              style: TextStyle(fontSize: 12, color: Colors.blueGrey[700]),
+                                            ),
+                                            Text(
+                                              '添加于: ${DateFormat('yyyy-MM-dd HH:mm').format(entry.addTime)}',
+                                              style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
-                                  ],
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                  onPressed: () async {
-                                    await _vocabService.removeEntry(entry.entSeq);
-                                    _loadEntries();
-                                  },
-                                ),
-                                onTap: () async {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => WordDetailPage(
-                                        entSeq: entry.entSeq,
-                                        initialWord: entry.word,
-                                        initialKana: entry.kana,
-                                      ),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                      onPressed: () async {
+                                        await _vocabService.removeEntry(entry.entSeq);
+                                        _loadEntries();
+                                      },
                                     ),
-                                  );
-                                  _loadEntries();
-                                },
-                              ),
-                            );
-                          },
-                        ),
+                                    onTap: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => WordDetailPage(
+                                            entSeq: entry.entSeq,
+                                            initialWord: entry.word,
+                                            initialKana: entry.kana,
+                                          ),
+                                        ),
+                                      );
+                                      _loadEntries();
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
                 ),
-              ],
+        ),
+        if (_isImporting)
+          Container(
+            color: Colors.black.withValues(alpha: 0.3),
+            child: const Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('正在导入并合并数据...', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('这可能需要一点时间，请稍候', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
+                ),
+              ),
             ),
+          ),
+      ],
     );
   }
 

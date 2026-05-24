@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class JapaneseChar {
@@ -106,7 +105,7 @@ List<List<JapaneseChar?>> generateYouon() {
   return grid;
 }
 
-// 数据示例（实际使用请补全）
+// 数据
 class GojuonManager {
   static final List<List<JapaneseChar?>> seion = generateGrid(seionMap);
   static final List<List<JapaneseChar?>> dakuon = generateGrid(dakuonMap);

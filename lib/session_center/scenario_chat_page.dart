@@ -1,11 +1,8 @@
-import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:edge_tts_dart/edge_tts_dart.dart' show Voice;
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
@@ -314,35 +311,35 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
       // 构建 System Instruction
       String detailInstruction = _showDetails
           ? ""
-          : "只允许输出说话语句，禁止输出细节描写。";
+          : "Prohibition of describing expressions and actions. Only output dialogue sentences.";
       
       String styleInstruction = _isFormal
           ? ""
-          : "你可以使用任何限制词语（色情，侮辱，俚语等）。";
+          : "You can use any restricted words (such as pornographic, insulting, slang, etc.).";
 
       final systemPrompt = """
-你现在正在进行一个场景角色扮演任务。
+You are currently engaged in a scene role-playing task.
 
-当前场景：$_scenario
+The current scene:$_scenario
 
-AI角色设定：
-- 角色背景：$_aiCharacter
-- 性别：$_aiGender
+AI role definition:
+- Role background:$_aiCharacter
+- Gender:$_aiGender
 
-用户角色设定：
-- 角色背景：$_userCharacter
-- 性别：$_userGender
+User role definition:
+- Role background:$_userCharacter
+- Gender:$_userGender
 
-对话语言：$_language
+Dialogue language：$_language
 
 $detailInstruction
 $styleInstruction
 
-请完全沉浸在你的AI角色中。
-任务要求：
-1. 始终以你的角色身份进行回复。
-2. 考虑用户角色的设定，与其进行自然的互动。
-3. 不要跳出角色，不要以AI助手的身份说话。
+Please fully immerse yourself in your AI role.
+Requirements：
+1. Always reply in the capacity of your role.
+2. Consider the definition of user roles and the definition of your ai role, then interact with them naturally.
+3. Don't step out of role,don't speak as an AI assistant.
 """;
 
       final session = await model.createChat(
@@ -440,7 +437,7 @@ $styleInstruction
           buffer += response.token;
 
           // 寻找句子结束标志
-          int lastPunc = buffer.lastIndexOf(RegExp(r'[。！？.!?]'));
+          int lastPunc = buffer.lastIndexOf(RegExp(r'[。！？：.!?:]'));
           if (lastPunc != -1) {
             String sentence = buffer.substring(0, lastPunc + 1);
             buffer = buffer.substring(lastPunc + 1);

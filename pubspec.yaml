@@ -57,6 +57,7 @@ dependencies:
       url: https://github.com/twn39/edgetts-dart.git
   flutter_native_splash: ^2.4.7
 
+  sqflite_common_ffi: any
 dependency_overrides:
   record_platform_interface: 1.4.0
   sqlite3: 3.2.0
@@ -64,7 +65,7 @@ dependency_overrides:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  sqflite_common_ffi: ^2.3.0
+  
 # 添加图标生成配置
 flutter_launcher_icons:
   android: "launcher_icon"

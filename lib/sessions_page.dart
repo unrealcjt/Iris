@@ -207,7 +207,7 @@ class SessionsPage extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '已有 1,248 位修行者正在探讨',
+            '和AI一起探讨',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.7),
               fontSize: 14,

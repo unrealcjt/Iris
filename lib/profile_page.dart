@@ -4,9 +4,49 @@ import 'package:Iris/profile/visual_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'profile/model_settings_page.dart';
 import 'profile/chat_page.dart';
+import 'profile/developer_settings_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
+
+  void _showDeveloperLogin(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('开发者模式'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          decoration: const InputDecoration(
+            hintText: '请输入密码',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text == 'unrealcjt') {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const DeveloperSettingsPage()),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('密码错误')),
+                );
+              }
+            },
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +75,12 @@ class ProfilePage extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const CircleAvatar(
-                      radius: 40,
-                      child: Icon(Icons.person, size: 40),
+                    GestureDetector(
+                      onTap: () => _showDeveloperLogin(context),
+                      child: const CircleAvatar(
+                        radius: 40,
+                        child: Icon(Icons.person, size: 40),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Text(

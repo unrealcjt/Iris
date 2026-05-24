@@ -319,17 +319,17 @@ class _VisualPageState extends State<VisualPage> {
                       ),
                     ),
                   // 如果包含文本则显示文本
-                  if (msg.text != null && msg.text!.isNotEmpty)
+                  if (msg.text.isNotEmpty)
                     isUser
                         ? Text(
-                            msg.text!,
+                            msg.text,
                             style: TextStyle(
                               color: colorScheme.onPrimary,
                               fontSize: 15,
                             ),
                           )
                         : MarkdownBody(
-                            data: msg.text!,
+                            data: msg.text,
                             selectable: true,
                             styleSheet: MarkdownStyleSheet(
                               p: TextStyle(

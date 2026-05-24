@@ -1,9 +1,7 @@
-import 'dart:io';
 import 'package:Iris/iris_assistant/mascot_controller.dart';
 import 'package:Iris/iris_assistant/iris_tools.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
-import 'package:path/path.dart' as p;
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 class ChatPage extends StatefulWidget {

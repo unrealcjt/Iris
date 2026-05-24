@@ -118,7 +118,7 @@ class JmEntry {
 
   // 利用 Getter 实时解析 JSON 为 Dart 对象
   List<Written> get kanji => _kanjiJson != null
-      ? (jsonDecode(_kanjiJson!) as List).map((i) => Written.fromJson(i)).toList()
+      ? (jsonDecode(_kanjiJson) as List).map((i) => Written.fromJson(i)).toList()
       : [];
 
   List<Written> get kana =>

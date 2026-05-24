@@ -374,17 +374,17 @@ class _AudioPageState extends State<AudioPage> {
                         ],
                       ),
                     ),
-                  if (msg.text != null && msg.text!.isNotEmpty)
+                  if (msg.text.isNotEmpty)
                     isUser
                         ? Text(
-                            msg.text!,
+                            msg.text,
                             style: TextStyle(
                               color: colorScheme.onPrimary,
                               fontSize: 15,
                             ),
                           )
                         : MarkdownBody(
-                            data: msg.text!,
+                            data: msg.text,
                             selectable: true,
                             styleSheet: MarkdownStyleSheet(
                               p: TextStyle(

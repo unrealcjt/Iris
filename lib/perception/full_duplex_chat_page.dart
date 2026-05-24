@@ -8,7 +8,6 @@ import 'package:record/record.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:Iris/iris_assistant/mascot_controller.dart';
 import 'package:Iris/utils/gemma_skill.dart';
-import 'package:Iris/utils/edge_tts_service.dart';
 
 enum FullDuplexState { idle, listening, thinking, speaking }
 

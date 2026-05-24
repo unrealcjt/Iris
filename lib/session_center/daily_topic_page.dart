@@ -1,9 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:edge_tts_dart/edge_tts_dart.dart' show Voice;
@@ -191,25 +188,25 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
       
       String detailInstruction = _showDetails
           ? ""
-          : "请禁止任何动作描写、神态描写或环境描写，只允许输出角色对话的台词。";
+          : "Prohibition of describing expressions and actions.";
 
       String styleInstruction = _isFormal
           ? ""
-          : "允许使用口语化的非书面词汇，以及允许使用性暗示，色情，俚语等受限制的词汇语句，根据讨论话题和你的角色设定决定是否使用。";
+          : "You can use any restricted words (such as pornographic, insulting, slang, etc.).";
 
       final systemPrompt = """
-你现在是【今日话题】的引导者。
-角色设定：$_character
-对话语言：$_language
+You are now the host of "Today's Topic".
+Role definition：$_character
+Dialogue language：$_language
 
 $detailInstruction
 $styleInstruction
 
-请完全沉浸在角色中。
-任务开始时，你会收到一个指令。
-如果是要求开始随机话题，请直接随机抛出一个有趣、值得探讨的话题作为对话开头。
-如果是给出了具体话题，请针对该话题发表简短精辟的见解并引导我讨论。
-不要以AI助手身份说话。
+Please fully immerse yourself in the role.
+At the beginning of the task, you will receive an instruction.
+If it is a request to start a random topic, simply randomly throw out an interesting and worthy topic to use as the opening of the conversation.
+If a specific topic is given, please express a brief and insightful opinion on that topic and guide the user to have a discussion.
+Do not speak as an AI assistant.
 """;
 
       final session = await model.createChat(
@@ -254,8 +251,8 @@ $styleInstruction
     try {
       // 如果指定了话题则讨论指定话题，否则生成随机话题
       String triggerText = _targetTopic.trim().isEmpty 
-          ? "请开始今天的随机话题。当前时间戳:${DateTime.now().millisecondsSinceEpoch}"
-          : "来讨论这个话题：$_targetTopic";
+          ? "Please start today's random topic. Current timestamp:${DateTime.now().millisecondsSinceEpoch}"
+          : "To discuss this topic:$_targetTopic";
 
       await _chatSession!.addQueryChunk(Message.text(text: triggerText, isUser: true));
       
@@ -274,7 +271,7 @@ $styleInstruction
           buffer += response.token;
 
           // 寻找句子结束标志
-          int lastPunc = buffer.lastIndexOf(RegExp(r'[。！？.!?]'));
+          int lastPunc = buffer.lastIndexOf(RegExp(r'[。！？：.!?:]'));
           if (lastPunc != -1) {
             String sentence = buffer.substring(0, lastPunc + 1);
             buffer = buffer.substring(lastPunc + 1);
@@ -348,7 +345,7 @@ $styleInstruction
           buffer += response.token;
 
           // 寻找句子结束标志
-          int lastPunc = buffer.lastIndexOf(RegExp(r'[。！？.!?]'));
+          int lastPunc = buffer.lastIndexOf(RegExp(r'[。！？：.!?:]'));
           if (lastPunc != -1) {
             String sentence = buffer.substring(0, lastPunc + 1);
             buffer = buffer.substring(lastPunc + 1);

@@ -1,7 +1,5 @@
 import 'package:Iris/custom_component/iris_selection_area.dart';
-import 'package:Iris/iris_assistant/mascot_controller.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:Iris/utils/gemma_skill.dart';
 import 'package:Iris/session_center//scenario_chat_page.dart';

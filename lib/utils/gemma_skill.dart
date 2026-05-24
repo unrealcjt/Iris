@@ -49,7 +49,7 @@ class GemmaSkill {
       topP: topP,
       enableVisionModality: imageBytes != null,
       enableAudioModality: audioBytes != null,
-      systemInstruction: "严格按照用户提示词给出的格式输出，禁止格式外的问候语"
+      systemInstruction: "Output strictly in the format specified by the user's prompt words. Prohibit any greetings outside the specified format."
     );
 
     Message message;
@@ -94,7 +94,7 @@ class GemmaSkill {
   /// 文字提取 (OCR)
   Stream<String> extractText({required Uint8List imageBytes}) {
     return _generate(
-      prompt: "请提取并列出图片中可见的所有日语文字内容。只需输出提取的文字，不要有多余的描述。",
+      prompt: "Extract and list all the Japanese text visible in the picture. Just output the extracted text, without any additional descriptions.",
       imageBytes: imageBytes,
     );
   }
@@ -102,7 +102,7 @@ class GemmaSkill {
   /// 场景描述
   Stream<String> describeScene({required Uint8List imageBytes}) {
     return _generate(
-      prompt: "请使用日语描述这张图片中的场景，包括环境、人物、动作以及整体氛围。",
+      prompt: "Describe the scene in this picture in Japanese.",
       imageBytes: imageBytes,
     );
   }
@@ -110,7 +110,7 @@ class GemmaSkill {
   /// 看图识物
   Stream<String> recognizeObject({required Uint8List imageBytes}) {
     return _generate(
-      prompt: "请识别这张图片中的主要物体，直接按照逗号隔开格式输出物品名字。请用日语回答。",
+      prompt: "Identify the main object in this picture and directly output the item name in a comma-separated format.Please answer in Japanese.",
       imageBytes: imageBytes,
     );
   }
@@ -136,14 +136,14 @@ format:
   /// 文化解析
   Stream<String> cultureResolve({required String res}) {
     return _generate(
-      prompt: "介绍一下在日本的${res}相关文化。请用日语回答。",
+      prompt: "Please introduce the related culture of [$res] in Japan. Answer in Japanese.",
     );
   }
 
   /// 台词翻译
   Stream<String> translateLines({required Uint8List imageBytes, String targetLang = "中文"}) {
     return _generate(
-      prompt: "请识别图片中的台词或对话，并将其翻译成$targetLang。请提供必要的语气分析。",
+      prompt: "Identify the Japanese lines or dialogues in the pictures and translate them into $targetLang. Please provide the necessary tone analysis in Chinese.",
       imageBytes: imageBytes,
     );
   }
@@ -221,7 +221,7 @@ When formatting the answer, first output the transcription in ${sourceLang}, the
   /// 全双工语音对话
   Stream<String> audioChat({required Uint8List audioBytes}) {
     return _generate(
-      prompt: "你是一个贴心的日语助手 Iris。请听用户的语音输入（日语），并用简洁的日语进行回应，保持对话自然流畅。直接输出你的回复内容。",
+      prompt: "You are a caring Japanese conversation assistant named Iris. Please listen to the user's voice input (in Japanese), and respond in Japanese, maintaining a natural and smooth conversation. Just output your reply content directly.",
       audioBytes: audioBytes,
     );
   }
@@ -232,7 +232,7 @@ When formatting the answer, first output the transcription in ${sourceLang}, the
   Stream<String> analyzeGrammar({required String textContent}) {
     final prompt = """
 Role: You are a professional linguist and grammar expert.
-Task: Analyze the grammar and structure of the provided dialogue sentences.
+Task: Analyze the grammar and structure of the provided japanese dialogue sentences.
 Dialogue:
 $textContent
 
@@ -243,7 +243,7 @@ Output format (Chinese rely):
     return _generate(prompt: prompt);
   }
 
-  /// 语法分析
+  /// 句子检查
   Stream<String> sentenceCheck({required String textContent}) {
     final prompt = """
 Role: You are a professional linguist and grammar expert.
@@ -270,7 +270,7 @@ When formatting the answer, output the the translation only.
   /// 生词解析
   Stream<String> vocabularyAnalyze({required String content}) {
     return _generate(
-      prompt: "请解析: '$content'这个日语生词，包括词性、读音、用法和例句",
+      prompt: "Please analyze: The Japanese word '$content', including its part of speech, pronunciation, usage and examples.",
     );
   }
 
@@ -284,23 +284,20 @@ When formatting the answer, output the the translation only.
   /// 随机句子
   Stream<String> exampleSentenceByWord({required String word}) {
     return _generate(
-      prompt: "使用'${word}'生成一句日语例句. now is ${DateTime.now().millisecondsSinceEpoch}",
+      prompt: "Generate a random Japanese sentence using '$word'. now is ${DateTime.now().millisecondsSinceEpoch}",
     );
   }
 
-  /// 完善后的题目生成方法
+  /// 题目生成方法
   Stream<String> generateProblem({
-    required String module,
     required String typeQ,
     required String level,
-    int count = 1,
   }) {
     return _generate(
       prompt: """
 You are a professional expert in Japanese education. Please create a Japanese practice question based on the following requirements:
-- Question Type Section：$module
 - Question Type：$typeQ
-- Difficulty level：$level
+- JLPT level：$level
 
 Output format should remain clear. Please ensure the accuracy and professionalism of the content. And follow the language requirements in the following format.
 
@@ -317,14 +314,26 @@ then new line, output string '@Ans', then new line
   Stream<String> scenarioAsk() {
     return _generate(
       prompt: """
-随机生成一个日常场景，分配两个角色，其中一个角色发出一句符合场景的日语询问。Now is ${DateTime.now()}。
-输出格式:
-场景: 场景设定。
-Ai: Ai的角色(例如小王)。
-你: 给用户分配的角色。
-小王询问: 询问内容，使用日语。
+Generate a random daily scene and assign two roles. One of the roles will make a Japanese question that fits the scene. Now is ${DateTime.now()}.
+Output format:
+Scene: Scene setting.
+Ai: Role of the AI.
+You: The role assigned to the user.
+Ai's role's question: Question content
 """,
     );
+  }
+  
+  Stream<String> dailyTip() {
+    DateTime now = DateTime.now();
+
+    int year = now.year;   // 2026
+    int month = now.month; // 5
+    int day = now.day;     // 24
+
+    // 拼接成字符串 (例如: 2026-5-24)
+    String dateStr = "$year-$month-$day";
+    return _generate(prompt: "Randomly generate a daily Japanese knowledge point, reply in Chinese. Today is ${dateStr}");
   }
   
   /// 通用文本对话

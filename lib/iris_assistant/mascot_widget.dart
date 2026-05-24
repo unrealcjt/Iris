@@ -1,7 +1,6 @@
 import 'package:Iris/custom_component/iris_selection_area.dart';
 import 'package:Iris/iris_assistant/gojuon_panel.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:path/path.dart' as p;
 import 'package:video_player/video_player.dart';
@@ -494,9 +493,119 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
           ),
 
           const SizedBox(height: 12),
-          _buildQuickAction(Icons.lightbulb_outline, "小知识"),
+          GestureDetector(
+            onTap: () => _showDailyTip(context),
+            child: _buildQuickAction(Icons.lightbulb_outline, "小知识"),
+          ),
         ],
       ),
+    );
+  }
+
+  void _showDailyTip(BuildContext context) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "DailyTip",
+      barrierColor: Colors.black87,
+      transitionDuration: const Duration(milliseconds: 400),
+      pageBuilder: (context, anim1, anim2) {
+        return Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFDF8E1), // 柔和的羊皮纸色
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: Colors.amber, width: 3),
+              boxShadow: [
+                BoxShadow(color: Colors.amber.withOpacity(0.3), blurRadius: 20, spreadRadius: 5)
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.lightbulb_rounded, color: Colors.amber, size: 32),
+                      const SizedBox(width: 12),
+                      Text(
+                        "今日日语小贴士",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.brown[800],
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Divider(color: Colors.amber, thickness: 1),
+                  const SizedBox(height: 16),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 300, minHeight: 100),
+                    child: StreamBuilder<String>(
+                      stream: _controller.getDailyTipStream(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator(color: Colors.amber));
+                        }
+                        
+                        final tip = snapshot.data ?? "";
+                        
+                        return SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              MarkdownBody(
+                                data: tip,
+                                styleSheet: MarkdownStyleSheet(
+                                  p: TextStyle(fontSize: 16, color: Colors.brown[900], height: 1.6),
+                                  strong: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              if (snapshot.connectionState == ConnectionState.active)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 8.0),
+                                  child: SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amber,
+                      foregroundColor: Colors.brown[900],
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                      elevation: 5,
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("我知道了！", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: anim1, curve: Curves.elasticOut),
+          child: FadeTransition(opacity: anim1, child: child),
+        );
+      },
     );
   }
 
@@ -1147,15 +1256,17 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (!_controller.isGenerating)
+          if (!_controller.isGenerating) ...[
             Expanded(
               child: TextField(
                 controller: _inputController,
                 focusNode: _focusNode,
                 style: const TextStyle(color: Colors.white),
                 keyboardType: TextInputType.multiline,
-                maxLines: null,
+                maxLines: 5,
+                minLines: 1,
                 decoration: InputDecoration(
                   hintText: "想聊点什么？",
                   hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
@@ -1175,20 +1286,22 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
               ),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _controller.isGenerating ? _controller.stopSkillReply : _handleSend,
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: _controller.isGenerating
-                    ? const _BlinkingPauseIcon()
-                    : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+          ],
+          if (_controller.isGenerating) const Spacer(),
+          GestureDetector(
+            onTap: _controller.isGenerating ? _controller.stopSkillReply : _handleSend,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: colorScheme.primary,
+                shape: BoxShape.circle,
               ),
+              child: _controller.isGenerating
+                  ? const _BlinkingPauseIcon()
+                  : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
             ),
+          ),
         ],
       ),
     );

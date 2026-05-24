@@ -19,7 +19,7 @@ class IrisSelectionArea extends StatelessWidget {
       contextMenuBuilder: (context, selectableRegionState) {
         final buttonItems = selectableRegionState.contextMenuButtonItems;
 
-        // 3. 插入你的自定义功能按钮
+        // 3. 插入自定义功能按钮
         buttonItems.insert(0, ContextMenuButtonItem(
           label: '询问 Iris',
           onPressed: () async {
@@ -30,12 +30,11 @@ class IrisSelectionArea extends StatelessWidget {
             final selectedText = data?.text;
 
             if (selectedText != null && selectedText.isNotEmpty) {
-              // --- 核心修改：触发回调 ---
+              // --- 触发回调 ---
               if (onActionSelected != null) {
                 onActionSelected!(selectedText);
               }
 
-              // 如果你希望使用了回调就不用全局 MascotController，可以把下面这行删掉
               MascotController().activeMascot(selectedText);
             }
           },
@@ -51,12 +50,11 @@ class IrisSelectionArea extends StatelessWidget {
             final selectedText = data?.text;
 
             if (selectedText != null && selectedText.isNotEmpty) {
-              // --- 核心修改：触发回调 ---
+              // --- 触发回调 ---
               if (onActionSelected != null) {
                 onActionSelected!(selectedText);
               }
 
-              // 如果你希望使用了回调就不用全局 MascotController，可以把下面这行删掉
               MascotController().speak(selectedText);
             }
           },

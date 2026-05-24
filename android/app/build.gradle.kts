@@ -39,11 +39,22 @@ android {
             // 确保启用了签名配置（如果你配置了的话）
             signingConfig = signingConfigs.getByName("debug")
 
+            // 正式版的应用名称
+            resValue("string", "app_name", "Iris")
+
             // 🛠️ 关键：确保有下面这一行来加载 proguard-rules.pro
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+
+            applicationIdSuffix = ".debug"
+
+            // [关键] Kotlin 中设置 resValue 的方法调用
+            resValue("string", "app_name", "IrisDebug")
         }
     }
 

@@ -1,11 +1,9 @@
 import 'package:Iris/custom_component/iris_selection_area.dart';
-import 'package:Iris/iris_assistant/mascot_controller.dart';
 import 'package:Iris/utils/edge_tts_service.dart';
 import 'package:Iris/utils/gemma_skill.dart';
 import 'package:flutter/material.dart';
 import 'package:Iris/jm/dictionary_service.dart';
 import 'package:Iris/jm/models.dart';
-import 'dart:io';
 
 import 'package:Iris/utils/wa_colors.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';

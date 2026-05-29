@@ -214,7 +214,8 @@ Do not speak as an AI assistant.
         temperature: 1.0,
         topK: 64,
         topP: 0.95,
-        randomSeed: DateTime.now().millisecondsSinceEpoch,
+        modelType: ModelType.gemma4,
+        isThinking: MascotController().isThinkingMode
       );
 
       await session.clearHistory();

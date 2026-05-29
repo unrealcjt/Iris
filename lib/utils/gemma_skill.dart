@@ -333,7 +333,7 @@ Ai's role's question: Question content
 
     // 拼接成字符串 (例如: 2026-5-24)
     String dateStr = "$year-$month-$day";
-    return _generate(prompt: "Randomly generate a daily Japanese knowledge point, reply in Chinese. Today is ${dateStr}");
+    return _generate(prompt: "Randomly generate a daily Japanese knowledge point, reply in Chinese, format include the knowledge point and its introduce and history. Today is ${dateStr}");
   }
   
   /// 通用文本对话

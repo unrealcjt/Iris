@@ -242,7 +242,7 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
   }
 
   Future<Uint8List?> _generateAndCacheAudio(int msgIndex, String text) async {
-    String voiceName = _selectedVoice ?? 'zh-CN-XiaoxiaoNeural';
+    String voiceName = _selectedVoice ?? 'zh-CN-XiaoyiNeural';
     if (_selectedVoice == null) {
       if (_language == "English") {
         voiceName = 'en-US-AriaNeural';
@@ -347,7 +347,8 @@ Requirements：
         temperature: 1.0,
         topK: 64,
         topP: 0.95,
-        randomSeed: DateTime.now().millisecondsSinceEpoch,
+        isThinking: MascotController().isThinkingMode,
+        modelType: ModelType.gemma4,
       );
 
       // 关键：强制清理一次历史记录，重置 KV Cache
@@ -389,13 +390,13 @@ Requirements：
   Future<void> _warnUpInference() async {
     await _chatSession!.addQueryChunk(Message.text(text: "now is ${DateTime.now().millisecondsSinceEpoch}", isUser: true));
     final stream = _chatSession!.generateChatResponseAsync();
-    await for (final response in stream) {
-      if (response is TextResponse) {
-        // _chatSession!.stopGeneration();
-        break;
-        debugPrint(response.token);
-      }
-    }
+    // await for (final response in stream) {
+    //   if (response is TextResponse) {
+    //     // _chatSession!.stopGeneration();
+    //     break;
+    //     debugPrint(response.token);
+    //   }
+    // }
   }
 
   Future<void> _sendMessage() async {

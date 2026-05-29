@@ -1346,7 +1346,24 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: _buildDialogueContent(msg.text ?? "", colorScheme),
+                                  children: [
+                                    ..._buildDialogueContent(msg.text ?? "", colorScheme),
+                                    if (!msg.isUser && _controller.getMessageSpeed(index) != null)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8.0),
+                                        child: Align(
+                                          alignment: Alignment.bottomRight,
+                                          child: Text(
+                                            "${_controller.getMessageSpeed(index)!.toStringAsFixed(1)} tokens/s",
+                                            style: TextStyle(
+                                              color: colorScheme.primary.withOpacity(0.5),
+                                              fontSize: 10,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ],

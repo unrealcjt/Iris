@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:Iris/profile/audio_page.dart';
 import 'package:Iris/profile/visual_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'auth_page.dart';
 import 'profile/model_settings_page.dart';
 import 'profile/chat_page.dart';
 import 'profile/developer_settings_page.dart';
@@ -50,126 +51,146 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 200,
-            pinned: true,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      colorScheme.primaryContainer,
-                      colorScheme.surface,
-                    ],
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        final user = Supabase.instance.client.auth.currentUser;
+        
+        return Scaffold(
+          backgroundColor: colorScheme.surface,
+          body: CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                expandedHeight: 200,
+                pinned: true,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          colorScheme.primaryContainer,
+                          colorScheme.surface,
+                        ],
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: () => _showDeveloperLogin(context),
+                          child: const CircleAvatar(
+                            radius: 40,
+                            child: Icon(Icons.person, size: 40),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        GestureDetector(
+                          onTap: user == null
+                              ? () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (context) => const AuthPage()),
+                                  );
+                                }
+                              : null,
+                          child: Text(
+                            user?.email ?? "去登录",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: user == null ? colorScheme.primary : null,
+                              decoration: user == null ? TextDecoration.underline : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    GestureDetector(
-                      onTap: () => _showDeveloperLogin(context),
-                      child: const CircleAvatar(
-                        radius: 40,
-                        child: Icon(Icons.person, size: 40),
-                      ),
+                actions: [
+                  if (user != null)
+                    IconButton(
+                      onPressed: () async {
+                        await Supabase.instance.client.auth.signOut();
+                      },
+                      icon: const Icon(Icons.logout),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      user?.email ?? "未登录",
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+                ],
               ),
-            ),
-            actions: [
-              IconButton(
-                onPressed: () async {
-                  await Supabase.instance.client.auth.signOut();
-                },
-                icon: const Icon(Icons.logout),
+              SliverPadding(
+                padding: const EdgeInsets.all(20),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 1.1,
+                  ),
+                  delegate: SliverChildListDelegate([
+                    _buildModuleCard(
+                      context,
+                      title: 'Chat',
+                      subtitle: '智能对话',
+                      icon: Icons.chat_bubble_rounded,
+                      color: Colors.blue,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ChatPage()),
+                        );
+                      },
+                    ),
+                    _buildModuleCard(
+                      context,
+                      title: 'Visual',
+                      subtitle: '视觉交互',
+                      icon: Icons.remove_red_eye_rounded,
+                      color: Colors.purple,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const VisualPage()),
+                        );
+                      },
+                    ),
+                    _buildModuleCard(
+                      context,
+                      title: 'Audio',
+                      subtitle: '音频交互',
+                      icon: Icons.mic_rounded,
+                      color: Colors.orange,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const AudioPage()),
+                        );
+                      },
+                    ),
+                    _buildModuleCard(
+                      context,
+                      title: 'Model',
+                      subtitle: '模型配置',
+                      icon: Icons.model_training_rounded,
+                      color: Colors.teal,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ModelSettingsPage()),
+                        );
+                      },
+                    ),
+                  ]),
+                ),
               ),
             ],
           ),
-          SliverPadding(
-            padding: const EdgeInsets.all(20),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1.1,
-              ),
-              delegate: SliverChildListDelegate([
-                _buildModuleCard(
-                  context,
-                  title: 'Chat',
-                  subtitle: '智能对话',
-                  icon: Icons.chat_bubble_rounded,
-                  color: Colors.blue,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const ChatPage()),
-                    );
-                  },
-                ),
-                _buildModuleCard(
-                  context,
-                  title: 'Visual',
-                  subtitle: '视觉交互',
-                  icon: Icons.remove_red_eye_rounded,
-                  color: Colors.purple,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const VisualPage()),
-                    );
-                  },
-                ),
-                _buildModuleCard(
-                  context,
-                  title: 'Audio',
-                  subtitle: '音频交互',
-                  icon: Icons.mic_rounded,
-                  color: Colors.orange,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const AudioPage()),
-                    );
-                  },
-                ),
-                _buildModuleCard(
-                  context,
-                  title: 'Model',
-                  subtitle: '模型配置',
-                  icon: Icons.model_training_rounded,
-                  color: Colors.teal,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const ModelSettingsPage()),
-                    );
-                  },
-                ),
-              ]),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

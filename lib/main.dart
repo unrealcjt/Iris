@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_page.dart';
 import 'profile_page.dart';
 import 'sessions_page.dart';
@@ -39,6 +40,15 @@ class _SplashScreenState extends State<SplashScreen> {
     await DictionaryService().init();
     await VocabularyService().init();
     await MascotController().init();
+
+    // 检查是否需要保持登录状态
+    final prefs = await SharedPreferences.getInstance();
+    final rememberMe = prefs.getBool('remember_me') ?? true;
+    if (!rememberMe) {
+      await Supabase.instance.client.auth.signOut();
+      // 重置为 true，防止下次登录时默认不记住（取决于 UI 默认值）
+      await prefs.setBool('remember_me', true);
+    }
 
     // 2. 初始化完成后，跳转到主界面
     if (mounted) {
@@ -116,16 +126,12 @@ class AuthStateWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 监听 Auth 状态变化
+    // 监听 Auth 状态变化，以便在登录/登出时刷新 UI
     return StreamBuilder<AuthState>(
       stream: Supabase.instance.client.auth.onAuthStateChange,
       builder: (context, snapshot) {
-        final session = snapshot.data?.session;
-        if (session != null) {
-          return const MainContainer();
-        } else {
-          return const AuthPage();
-        }
+        // 默认进入主界面，无论是否登录
+        return const MainContainer();
       },
     );
   }

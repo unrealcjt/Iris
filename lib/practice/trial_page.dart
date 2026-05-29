@@ -109,6 +109,7 @@ class _TrialPageState extends State<TrialPage> {
         temperature: 1.0,
         topP: 0.95,
         topK: 64,
+        isThinking: MascotController().isThinkingMode,
         systemInstruction: """
 You are a professional JLPT (Japanese Language Proficiency Test) question creator. Please randomly generate high-quality single-choice practice questions based on the user's provided level and question format. Maintain professionalism and help assess the user's Japanese proficiency.
 When asked to create questions, output the question content in neat line breaks, but do not provide the answer. Wait for the user to answer and then let me check their response.

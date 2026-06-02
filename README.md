@@ -32,5 +32,3 @@ App接入Jmdict日语词典，位置应该位于assets目录下，需要运行�
 
 如果需要直接使用，请下载 [Release](https://github.com/unrealcjt/Iris/releases/latest/download/app-arm64-v8a-release.apk) 版本。
 
-目前仅支持CPU调用（作者本人手机配置不足，等哪天换手机考虑新增GPU调用）
-

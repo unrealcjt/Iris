@@ -35,9 +35,14 @@ class _TextExtractionPageState extends VisionBaseState<TextExtractionPage> {
 
       final stream = _gemmaSkill.extractText(imageBytes: imageBytes!);
       await for (final chunk in stream) {
-        setState(() {
-          resultText += chunk;
-        });
+        if (chunk.endsWith('<channel|>')) {
+          continue;
+        }
+        else {
+          setState(() {
+            resultText += chunk;
+          });
+        }
       }
       setState(() {
         visionState = VisionState.result;

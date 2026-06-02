@@ -89,9 +89,14 @@ class _WordDetailPageState extends State<WordDetailPage> {
       await _gemmaSkill.initialize();
       final stream = _gemmaSkill.exampleSentenceByWord(word: word);
       await for (final chunk in stream) {
-        setState(() {
-          _exampleSentence += chunk;
-        });
+        if (chunk.endsWith('<channel|>')) {
+          continue;
+        }
+        else {
+          setState(() {
+            _exampleSentence += chunk;
+          });
+        }
       }
     } catch (e) {
       setState(() => _exampleSentence = "例句生成失败: $e");

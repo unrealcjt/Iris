@@ -35,9 +35,14 @@ class _ToneAnalysisPageState extends AudioBaseState<ToneAnalysisPage> {
       await _gemmaSkill.initialize();
       final stream = _gemmaSkill.scenarioAsk();
       await for (final chunk in stream) {
-        setState(() {
-          _scenarioController.text += chunk;
-        });
+        if (chunk.endsWith('<channel|>')) {
+          continue;
+        }
+        else {
+          setState(() {
+            _scenarioController.text += chunk;
+          });
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('生成场景失败: $e')));
@@ -65,9 +70,14 @@ class _ToneAnalysisPageState extends AudioBaseState<ToneAnalysisPage> {
       );
       
       await for (final chunk in stream) {
-        setState(() {
-          resultText += chunk;
-        });
+        if (chunk.endsWith('<channel|>')) {
+          continue;
+        }
+        else {
+          setState(() {
+            resultText += chunk;
+          });
+        }
       }
       setState(() {
         audioState = AudioState.result;

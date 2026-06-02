@@ -296,7 +296,7 @@ class _ScenarioChatPageState extends State<ScenarioChatPage> {
       _isLoadingModel = true;
       _loadingStatus = "正在初始化角色设定...\n稍等一下，正在预热";
     });
-    MascotController().setVisible(false);
+    // MascotController().setVisible(false);
 
     try {
       if (_chatSession != null) {
@@ -342,7 +342,7 @@ Requirements：
 3. Don't step out of role,don't speak as an AI assistant.
 """;
 
-      final session = await model.createChat(
+      final session = await model.openChat(
         systemInstruction: systemPrompt,
         temperature: 1.0,
         topK: 64,
@@ -599,7 +599,7 @@ Requirements：
       setState(() {
         _chatSession = null;
       });
-      MascotController().setVisible(true);
+      // MascotController().setVisible(true);
     }
 
     if (!mounted) return;

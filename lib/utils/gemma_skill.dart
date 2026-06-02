@@ -49,8 +49,10 @@ class GemmaSkill {
       topP: topP,
       enableVisionModality: imageBytes != null,
       enableAudioModality: audioBytes != null,
+      enableThinking: MascotController().isThinkingMode,
       systemInstruction: "Output strictly in the format specified by the user's prompt words. Prohibit any greetings outside the specified format."
     );
+    print(MascotController().isThinkingMode);
 
     Message message;
     if (imageBytes != null) {

@@ -40,6 +40,7 @@ class _SceneDescriptionPageState extends VisionBaseState<SceneDescriptionPage> {
           if (visionState == VisionState.processing) {
             visionState = VisionState.result;
           }
+
           resultText += chunk;
         });
       }

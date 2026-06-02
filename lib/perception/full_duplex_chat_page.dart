@@ -247,18 +247,23 @@ class _FullDuplexChatPageState extends State<FullDuplexChatPage> with SingleTick
       String fullResponse = "";
       if (chatStream != null) {
         await for (final chunk in chatStream) {
-          if (_state != FullDuplexState.thinking && _state != FullDuplexState.speaking) break; 
-          
-          if (_state == FullDuplexState.thinking) {
+          if (chunk.endsWith('<channel|>')) {
+            continue;
+          }
+          else {
+            if (_state != FullDuplexState.thinking && _state != FullDuplexState.speaking) break;
+
+            if (_state == FullDuplexState.thinking) {
+              setState(() {
+                _state = FullDuplexState.speaking;
+                _displayText = "Iris 正在回答...";
+              });
+            }
             setState(() {
-              _state = FullDuplexState.speaking;
-              _displayText = "Iris 正在回答...";
+              _aiResponseText += chunk;
+              fullResponse += chunk;
             });
           }
-          setState(() { 
-            _aiResponseText += chunk; 
-            fullResponse += chunk; 
-          });
         }
       }
 

@@ -49,6 +49,16 @@ class VocabularyService {
     return maps.map((m) => VocabularyEntry.fromMap(m)).toList();
   }
 
+  Future<List<VocabularyEntry>> getRandomEntries(int limit) async {
+    final db = await _db;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'vocabulary',
+      orderBy: 'RANDOM()',
+      limit: limit,
+    );
+    return maps.map((m) => VocabularyEntry.fromMap(m)).toList();
+  }
+
   Future<void> resetAllProgress() async {
     final db = await _db;
     await db.update(

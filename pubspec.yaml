@@ -37,7 +37,7 @@ dependencies:
   file_picker: ^8.1.7
   path_provider: ^2.1.5
   path: ^1.9.0
-  flutter_gemma: ^0.15.0
+  flutter_gemma: 0.16.3
   flutter_markdown: ^0.7.4
   shared_preferences: ^2.2.3
   intl: ^0.20.2
@@ -55,7 +55,9 @@ dependencies:
   edge_tts_dart:
     git:
       url: https://github.com/twn39/edgetts-dart.git
+  flutter_tts: ^4.2.0
   flutter_native_splash: ^2.4.7
+  webview_flutter: ^4.10.0
 
   sqflite_common_ffi: any
 dependency_overrides:
@@ -103,6 +105,12 @@ flutter:
     - assets/img/
     - assets/video/
     - assets/jmdict.sqlite
+    - assets/skills/
+    - assets/skills/addVocabulary/
+    - assets/skills/searchWeb/
+    - assets/skills/galGame/
+    - assets/skills/galGame/images/
+    - assets/skills/reciteVocabulary/
 
 flutter_native_splash:
   color: "#d3d4cf"           # 背景颜色

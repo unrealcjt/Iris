@@ -35,9 +35,14 @@ class _SpeechTranslationPageState extends AudioBaseState<SpeechTranslationPage> 
 
       final stream = _gemmaSkill.translateSpeech(audioBytes: audioBytes!);
       await for (final chunk in stream) {
-        setState(() {
-          resultText += chunk;
-        });
+        if (chunk.endsWith('<channel|>')) {
+          continue;
+        }
+        else {
+          setState(() {
+            resultText += chunk;
+          });
+        }
       }
       setState(() {
         audioState = AudioState.result;

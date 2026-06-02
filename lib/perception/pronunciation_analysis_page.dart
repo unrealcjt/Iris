@@ -58,9 +58,14 @@ class _PronunciationAnalysisPageState extends AudioBaseState<PronunciationAnalys
       await _gemmaSkill.initialize();
       final stream = _gemmaSkill.exampleSentence();
       await for (final chunk in stream) {
-        setState(() {
-          _textController.text += chunk;
-        });
+        if (chunk.endsWith('<channel|>')) {
+          continue;
+        }
+        else {
+          setState(() {
+            _textController.text += chunk;
+          });
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('生成例句失败: $e')));
@@ -112,9 +117,14 @@ class _PronunciationAnalysisPageState extends AudioBaseState<PronunciationAnalys
       );
       
       await for (final chunk in stream) {
-        setState(() {
-          resultText += chunk;
-        });
+        if (chunk.endsWith('<channel|>')) {
+          continue;
+        }
+        else {
+          setState(() {
+            resultText += chunk;
+          });
+        }
       }
       setState(() {
         audioState = AudioState.result;

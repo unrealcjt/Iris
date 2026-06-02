@@ -174,7 +174,7 @@ class _DailyTopicPageState extends State<DailyTopicPage> {
       _isLoadingModel = true;
       _loadingStatus = "正在捕捉今日灵感...";
     });
-    MascotController().setVisible(false);
+    // MascotController().setVisible(false);
 
     try {
       if (_chatSession != null) {
@@ -506,7 +506,7 @@ Do not speak as an AI assistant.
       setState(() {
         _chatSession = null;
       });
-      MascotController().setVisible(true);
+      // MascotController().setVisible(true);
     }
 
     if (!mounted) return;

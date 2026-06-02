@@ -41,12 +41,17 @@ class _TranslateLinesPageState extends VisionBaseState<TranslateLinesPage> {
       
       await for (final chunk in stream) {
         if (mounted) {
-          setState(() {
-            if (visionState == VisionState.processing) {
-              visionState = VisionState.result;
-            }
-            resultText += chunk;
-          });
+          if (chunk.endsWith('<channel|>')) {
+            continue;
+          }
+          else {
+            setState(() {
+              if (visionState == VisionState.processing) {
+                visionState = VisionState.result;
+              }
+              resultText += chunk;
+            });
+          }
         }
       }
       

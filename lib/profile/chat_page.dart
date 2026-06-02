@@ -88,9 +88,9 @@ class _ChatPageState extends State<ChatPage> {
         _chatSession = await model.createChat(
           isThinking: _isThinkingMode,
           modelType: ModelType.gemma4,
-          supportsFunctionCalls: true,
-          systemInstruction: "你是一个名为 Iris 的助理。请使用 'speak' 工具来回答用户。请在一次回复中同时完成工具调用和对应的文字输出。收到工具执行成功的反馈后，请直接结束对话，不要重复调用工具。",
-          tools: IrisTools.all,
+          temperature: 1.0,
+          topK: 64,
+          topP: 0.95
         );
       }
 
@@ -126,9 +126,7 @@ class _ChatPageState extends State<ChatPage> {
     _controller.clear();
     
     // 如果是思考模式，使用 Message constructor 指定类型，因为 factory hardcode 了 isUser: false
-    final userMsg = _isThinkingMode 
-        ? Message(text: text, isUser: true, type: MessageType.thinking)
-        : Message.text(text: text, isUser: true);
+    final userMsg = Message.text(text: text, isUser: true);
     
     setState(() {
       _messages.add(userMsg);
@@ -151,112 +149,35 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _processModelResponse() async {
-    if (_recursiveToolCallCount > _maxRecursiveCalls) {
-      debugPrint("检测到潜在的工具调用死循环，已强制中断。");
-      return;
-    }
-
     debugPrint("开始获取模型响应流...");
     final stream = _chatSession!.generateChatResponseAsync();
     
     String fullResponse = "";
     String thinkingProcess = "";
-    bool hasFunctionCall = false;
     int? aiMsgIndex;
 
     await for (final response in stream) {
-      if (response is TextResponse || response is ThinkingResponse) {
-        if (aiMsgIndex == null) {
-          setState(() {
-            _messages.add(Message.text(text: "", isUser: false));
-            aiMsgIndex = _messages.length - 1;
-          });
-        }
-
-        if (response is TextResponse) {
-          fullResponse += response.token;
-        } else if (response is ThinkingResponse) {
-          thinkingProcess += response.content;
-        }
-
-        final displayShowing = _cleanResponseText(fullResponse);
-
+      if (aiMsgIndex == null) {
         setState(() {
-          _messages[aiMsgIndex!] = Message(
-            text: displayShowing, 
-            isUser: false,
-            // 如果清理后没有文本且没有思考，先标记为 toolCall 隐藏，防止显示空气泡或 JSON
-            type: (displayShowing.isEmpty && thinkingProcess.isEmpty) ? MessageType.toolCall : MessageType.text,
-            toolName: thinkingProcess.isNotEmpty ? thinkingProcess : null,
-          );
+          _messages.add(Message.text(text: "", isUser: false));
+          aiMsgIndex = _messages.length - 1;
         });
-        _scrollToBottom();
-      } else if (response is FunctionCallResponse) {
-        debugPrint("捕获到工具调用: ${response.name}");
-        hasFunctionCall = true;
-        _recursiveToolCallCount++;
-        // 如果当前消息气泡清理后是空的，说明它只包含工具调用 JSON，隐藏它
-        if (aiMsgIndex != null && _cleanResponseText(fullResponse).isEmpty) {
-          setState(() {
-            _messages[aiMsgIndex!] = _messages[aiMsgIndex!].copyWith(type: MessageType.toolCall);
-          });
-        }
-        await _handleFunctionCall(response);
-      } else if (response is ParallelFunctionCallResponse) {
-        debugPrint("捕获到并行工具调用: ${response.calls.length} 个");
-        hasFunctionCall = true;
-        if (aiMsgIndex != null && _cleanResponseText(fullResponse).isEmpty) {
-          setState(() {
-            _messages[aiMsgIndex!] = _messages[aiMsgIndex!].copyWith(type: MessageType.toolCall);
-          });
-        }
-        for (final call in response.calls) {
-          await _handleFunctionCall(call);
-        }
       }
-    }
 
-    if (hasFunctionCall) {
-      debugPrint("工具执行完毕，请求模型处理后续结果...");
-      await _processModelResponse();
-    }
-  }
-
-  String _cleanResponseText(String text) {
-    // 移除 Gemma 4 的工具调用标记及其内部 JSON 内容
-    // 匹配 <|tool_call|>...<|tool_call|> 及其中的内容
-    String cleaned = text
-        .replaceAll(RegExp(r'<\|tool_call\|>.*?<\|tool_call\|>', dotAll: true), '')
-        .replaceAll(RegExp(r'<\|.*?\|>', dotAll: true), '') // 移除其他可能的 <|...|> 标记
-        .trim();
-
-    // 如果清理后剩下的内容看起来像是一个单独的 JSON 对象（通常是未被标记完全的工具调用）
-    if (cleaned.startsWith('{') && cleaned.endsWith('}') && cleaned.contains('"name"')) {
-      return "";
-    }
-
-    return cleaned;
-  }
-
-  Future<void> _handleFunctionCall(FunctionCallResponse call) async {
-    debugPrint("执行工具逻辑: ${call.name}, 参数: ${call.args}");
-    if (call.name == 'speak') {
-      final textToSpeak = call.args['text'] as String?;
-      if (textToSpeak != null && textToSpeak.isNotEmpty) {
-        setState(() {
-          _messages.add(Message.systemInfo(text: "Iris 正在为您播报...", icon: "volume_up"));
-        });
-        _scrollToBottom();
-        
-        // 调用看板娘控制器的播放逻辑，它会自动处理多语言配音
-        await MascotController().speak(textToSpeak);
-        
-        // 向模型反馈结果
-        await _chatSession!.addQueryChunk(Message.toolResponse(
-          toolName: 'speak',
-          response: {'status': 'success'},
-        ));
+      if (response is TextResponse) {
+        fullResponse += response.token;
+      } else if (response is ThinkingResponse) {
+        thinkingProcess += response.content;
       }
+
+      setState(() {
+        _messages[aiMsgIndex!] = Message(
+          text: fullResponse,
+          isUser: false,
+          type:MessageType.text,
+        );
+      });
+      _scrollToBottom();
     }
   }
 

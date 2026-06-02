@@ -83,7 +83,7 @@ class _TrialPageState extends State<TrialPage> {
     super.initState();
     // 隐藏 Iris 悬浮球 - 使用延迟确保在路由切换完成后执行
     Future.microtask(() {
-      MascotController().setVisible(false);
+      // MascotController().setVisible(false);
     });
     _selectedPoint = jlptData[0].points[0];
     _initChat();
@@ -93,7 +93,7 @@ class _TrialPageState extends State<TrialPage> {
   void dispose() {
     _chat?.close();
     // 恢复 Iris 悬浮球
-    MascotController().setVisible(true);
+    // MascotController().setVisible(true);
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -104,17 +104,30 @@ class _TrialPageState extends State<TrialPage> {
     if (model == null) return;
     
     try {
-      _chat = await model.createChat(
+      _chat = await model.openChat(
         modelType: ModelType.gemma4,
         temperature: 1.0,
         topP: 0.95,
         topK: 64,
         isThinking: MascotController().isThinkingMode,
         systemInstruction: """
-You are a professional JLPT (Japanese Language Proficiency Test) question creator. Please randomly generate high-quality single-choice practice questions based on the user's provided level and question format. Maintain professionalism and help assess the user's Japanese proficiency.
-When asked to create questions, output the question content in neat line breaks, but do not provide the answer. Wait for the user to answer and then let me check their response.
-When the user provides an answer for me to check, verify if the answer is correct and provide an explanation in Chinese to the user.
-"""
+You are a professional JLPT question creator. 
+
+## Workflow Rules (Strictly Follow)
+You operate in two distinct modes. DO NOT mix them.
+
+### Mode 1: Question Generation (When user requests a question)
+- ONLY output the question text and the options (A, B, C, D).
+- CRITICAL: End your response immediately after the options. 
+- DO NOT reveal the correct answer, hints, or explanations under any circumstances.
+- Stop and wait for the user's input.
+
+### Mode 2: Verification (When user submits an answer, e.g., "A", "选B")
+- Check if the user's answer is correct.
+- Provide a detailed explanation in Chinese.
+
+## Current Action
+Check the user's input. If they are asking for a question, execute [Mode 1] only. If they provide an answer, execute [Mode 2]."""
       );
     } catch (e) {
       debugPrint("Init chat error: $e");
@@ -135,8 +148,7 @@ When the user provides an answer for me to check, verify if the answer is correc
     setState(() {
       _isGenerating = true;
       _streamingText = "";
-      // 添加一个临时的思考状态消息
-      _displayMessages.add(const Message(text: "...", isUser: false, type: MessageType.thinking));
+      // 不再添加临时的 thinking 消息，而是直接开始流式处理
     });
 
     String? categoryTitle;
@@ -153,19 +165,23 @@ When the user provides an answer for me to check, verify if the answer is correc
       await _chat!.addQuery(Message.text(text: prompt, isUser: true));
       
       final stream = _chat!.generateChatResponseAsync();
-      bool firstToken = true;
+      String fullThinking = "";
+      String fullAnswer = "";
+
       await for (final response in stream) {
         if (!mounted) break;
-        if (response is TextResponse) {
-          if (firstToken) {
-            setState(() {
-              // 移除思考状态消息，开始真实流式展示
-              _displayMessages.removeLast();
-              firstToken = false;
-            });
-          }
+        if (response is ThinkingResponse) {
+          fullThinking += response.content;
           setState(() {
-            _streamingText += response.token;
+            _streamingText = "<think>\n$fullThinking\n</think>\n$fullAnswer";
+          });
+          _scrollToBottom();
+        } else if (response is TextResponse) {
+          fullAnswer += response.token;
+          setState(() {
+            _streamingText = fullThinking.isNotEmpty 
+                ? "<think>\n$fullThinking\n</think>\n$fullAnswer" 
+                : fullAnswer;
           });
           _scrollToBottom();
         }
@@ -196,8 +212,6 @@ When the user provides an answer for me to check, verify if the answer is correc
       _displayMessages.add(Message.text(text: userMsg, isUser: true));
       _isGenerating = true;
       _streamingText = "";
-      // 添加思考状态
-      _displayMessages.add(const Message(text: "...", isUser: false, type: MessageType.thinking));
     });
     _scrollToBottom();
 
@@ -208,18 +222,23 @@ When the user provides an answer for me to check, verify if the answer is correc
       await _chat!.addQuery(Message.text(text: wrappedPrompt, isUser: true));
 
       final stream = _chat!.generateChatResponseAsync();
-      bool firstToken = true;
+      String fullThinking = "";
+      String fullAnswer = "";
+
       await for (final response in stream) {
         if (!mounted) break;
-        if (response is TextResponse) {
-          if (firstToken) {
-            setState(() {
-              _displayMessages.removeLast();
-              firstToken = false;
-            });
-          }
+        if (response is ThinkingResponse) {
+          fullThinking += response.content;
           setState(() {
-            _streamingText += response.token;
+            _streamingText = "<think>\n$fullThinking\n</think>\n$fullAnswer";
+          });
+          _scrollToBottom();
+        } else if (response is TextResponse) {
+          fullAnswer += response.token;
+          setState(() {
+            _streamingText = fullThinking.isNotEmpty 
+                ? "<think>\n$fullThinking\n</think>\n$fullAnswer" 
+                : fullAnswer;
           });
           _scrollToBottom();
         }
@@ -501,8 +520,7 @@ When the user provides an answer for me to check, verify if the answer is correc
 
   Widget _buildMessageBubble(Message message, {bool isStreaming = false}) {
     final isUser = message.isUser;
-    final isThinking = message.type == MessageType.thinking;
-
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12.0),
       child: Row(
@@ -525,26 +543,10 @@ When the user provides an answer for me to check, verify if the answer is correc
                 ],
                 border: Border.all(color: isUser ? WaColors.skyBlue.withAlpha(51) : Colors.grey.withAlpha(40)),
               ),
-              child: isThinking 
-                ? const SizedBox(
-                    width: 40,
-                    child: _TypingDotsIndicator(),
-                  )
-                : Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  MarkdownBody(
-                    data: message.text,
-                    selectable: true,
-                    styleSheet: MarkdownStyleSheet(
-                      p: TextStyle(fontSize: 15, color: WaColors.sumiBlack, height: 1.7),
-                      code: TextStyle(backgroundColor: Colors.transparent, fontSize: 13, color: Colors.indigo.shade700),
-                      codeblockDecoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(4)),
-                      h1: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: WaColors.akaRed),
-                      h2: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: WaColors.sumiBlack),
-                      listBullet: const TextStyle(color: WaColors.akaRed, fontWeight: FontWeight.bold),
-                    ),
-                  ),
+                  ..._buildDialogueContent(message.text),
                   if (isStreaming)
                     const Padding(
                       padding: EdgeInsets.only(top: 12.0),
@@ -569,6 +571,64 @@ When the user provides an answer for me to check, verify if the answer is correc
           if (isUser) _buildAvatar(true),
         ],
       ),
+    );
+  }
+
+  List<Widget> _buildDialogueContent(String raw) {
+    List<Widget> widgets = [];
+    String text = raw;
+
+    // 处理思考内容 <think>...</think>
+    while (text.contains('<think>')) {
+      int start = text.indexOf('<think>');
+      int end = text.indexOf('</think>');
+
+      // 添加思考前的内容
+      if (start > 0) {
+        String pre = text.substring(0, start).trim();
+        if (pre.isNotEmpty) {
+          widgets.add(MarkdownBody(
+            data: pre,
+            selectable: true,
+            styleSheet: _getMarkdownStyle(),
+          ));
+        }
+      }
+
+      // 添加思考块
+      if (end != -1) {
+        String thinking = text.substring(start + 7, end).trim();
+        widgets.add(_ThinkingBlock(thinking: thinking));
+        text = text.substring(end + 8).trim();
+      } else {
+        // 未闭合的思考块（流式传输中）
+        String thinking = text.substring(start + 7).trim();
+        widgets.add(_ThinkingBlock(thinking: thinking));
+        text = "";
+        break;
+      }
+    }
+
+    // 添加剩余内容
+    if (text.isNotEmpty) {
+      widgets.add(MarkdownBody(
+        data: text,
+        selectable: true,
+        styleSheet: _getMarkdownStyle(),
+      ));
+    }
+
+    return widgets;
+  }
+
+  MarkdownStyleSheet _getMarkdownStyle() {
+    return MarkdownStyleSheet(
+      p: const TextStyle(fontSize: 15, color: WaColors.sumiBlack, height: 1.7),
+      code: TextStyle(backgroundColor: Colors.transparent, fontSize: 13, color: Colors.indigo.shade700),
+      codeblockDecoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(4)),
+      h1: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: WaColors.akaRed),
+      h2: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: WaColors.sumiBlack),
+      listBullet: const TextStyle(color: WaColors.akaRed, fontWeight: FontWeight.bold),
     );
   }
 
@@ -652,6 +712,74 @@ When the user provides an answer for me to check, verify if the answer is correc
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ThinkingBlock extends StatefulWidget {
+  final String thinking;
+  const _ThinkingBlock({required this.thinking});
+
+  @override
+  State<_ThinkingBlock> createState() => _ThinkingBlockState();
+}
+
+class _ThinkingBlockState extends State<_ThinkingBlock> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withAlpha(30)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _isExpanded = !_isExpanded),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.psychology_outlined, size: 16, color: WaColors.akaRed),
+                const SizedBox(width: 8),
+                const Text(
+                  "Iris 正在思考...",
+                  style: TextStyle(
+                    color: WaColors.sumiBlack,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  _isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  size: 16,
+                  color: Colors.grey,
+                ),
+              ],
+            ),
+          ),
+          if (_isExpanded) ...[
+            const SizedBox(height: 8),
+            const Divider(color: Colors.grey, height: 1),
+            const SizedBox(height: 8),
+            Text(
+              widget.thinking,
+              style: TextStyle(
+                color: WaColors.sumiBlack.withAlpha(153),
+                fontSize: 13,
+                height: 1.5,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

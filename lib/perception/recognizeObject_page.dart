@@ -78,9 +78,14 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
 
       final stream = _gemmaSkill.recognizeMarkObject(imageBytes: imageBytes!);
       await for (final chunk in stream) {
-        setState(() {
-          resultText += chunk;
-        });
+        if (chunk.endsWith('<channel|>')) {
+          continue;
+        }
+        else {
+          setState(() {
+            resultText += chunk;
+          });
+        }
       }
 
       _parseItems();
@@ -172,9 +177,14 @@ class _RecognizeObjectPageState extends VisionBaseState<RecognizeObjectPage> {
       final stream = _gemmaSkill.cultureResolve(res: item);
       await for (final chunk in stream) {
         if (mounted) {
-          setState(() {
-            _itemCultures[item] = (_itemCultures[item] ?? "") + chunk;
-          });
+          if (chunk.endsWith('<channel|>')) {
+            continue;
+          }
+          else {
+            setState(() {
+              _itemCultures[item] = (_itemCultures[item] ?? "") + chunk;
+            });
+          }
         }
       }
     } catch (e) {

@@ -1,8 +1,14 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:Iris/custom_component/iris_selection_area.dart';
+import 'package:Iris/iris_assistant/agent_page.dart';
 import 'package:Iris/iris_assistant/gojuon_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
 import 'mascot_controller.dart';
 
@@ -25,8 +31,15 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
   bool _isModelSelectionOpen = false; // 用于控制模型选择界面的显示
   bool _isLanguageSelectionOpen = false; // 用于控制翻译语言选择界面的显示
   bool _isTextInputOpen = false; // 用于控制翻译文本输入界面的显示
-  bool _isAgentInputOpen = false; // 用于控制 Agent 输入界面的显示
   bool _isActionMenuOpen = false; // 用于控制功能集菜单的展开
+
+  // --- 多模态输入状态 ---
+  final ImagePicker _picker = ImagePicker();
+  final AudioRecorder _recorder = AudioRecorder();
+  Uint8List? _selectedImageBytes;
+  File? _selectedImageFile;
+  bool _isVoiceMode = false;
+  bool _isRecording = false;
 
   @override
   void initState() {
@@ -44,6 +57,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
     _translateInputController.dispose();
     _focusNode.dispose();
     _talkingController.dispose();
+    _recorder.dispose();
     super.dispose();
   }
 
@@ -71,9 +85,12 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
       _isModelSelectionOpen = false;
       _isLanguageSelectionOpen = false;
       _isTextInputOpen = false;
-      _isAgentInputOpen = false;
       _isActionMenuOpen = false;
       _translateInputController.clear();
+      _selectedImageBytes = null;
+      _selectedImageFile = null;
+      _isVoiceMode = false;
+      _isRecording = false;
     }
     _wasExpanded = _controller.isExpanded;
 
@@ -109,10 +126,96 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
 
   void _handleSend() {
     final text = _inputController.text.trim();
-    if (text.isNotEmpty && !_controller.isGenerating) {
+    if ((text.isNotEmpty || _selectedImageBytes != null) && !_controller.isGenerating) {
       _inputController.clear();
-      _controller.sendMessage(text);
+      final image = _selectedImageBytes;
+      setState(() {
+        _selectedImageBytes = null;
+        _selectedImageFile = null;
+      });
+      _controller.sendMessage(text, imageBytes: image);
     }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
+        setState(() {
+          _selectedImageFile = File(pickedFile.path);
+          _selectedImageBytes = bytes;
+        });
+      }
+    } catch (e) {
+      debugPrint("选择图片失败: $e");
+    }
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      if (await _recorder.hasPermission()) {
+        final directory = await getTemporaryDirectory();
+        final path = p.join(directory.path, 'mascot_temp_audio.pcm');
+        await _recorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.pcm16bits,
+            sampleRate: 16000,
+            numChannels: 1,
+          ),
+          path: path,
+        );
+        setState(() => _isRecording = true);
+      }
+    } catch (e) {
+      debugPrint("开始录音失败: $e");
+    }
+  }
+
+  Future<void> _stopAndSendRecording() async {
+    try {
+      final path = await _recorder.stop();
+      setState(() => _isRecording = false);
+      if (path != null) {
+        final file = File(path);
+        final rawBytes = await file.readAsBytes();
+        final processedBytes = _processAudioData(rawBytes);
+        _controller.sendMessage("", audioBytes: processedBytes);
+      }
+    } catch (e) {
+      debugPrint("停止录音失败: $e");
+    }
+  }
+
+  Uint8List _processAudioData(Uint8List rawBytes) {
+    return _createWavHeader(rawBytes, 16000);
+  }
+
+  Uint8List _createWavHeader(Uint8List pcmData, int sampleRate) {
+    final int fileSize = pcmData.length + 36;
+    final ByteData header = ByteData(44);
+    header.setUint8(0, 0x52); header.setUint8(1, 0x49); header.setUint8(2, 0x46); header.setUint8(3, 0x46);
+    header.setUint32(4, fileSize, Endian.little);
+    header.setUint8(8, 0x57); header.setUint8(9, 0x41); header.setUint8(10, 0x56); header.setUint8(11, 0x45);
+    header.setUint8(12, 0x66); header.setUint8(13, 0x6D); header.setUint8(14, 0x74); header.setUint8(15, 0x20);
+    header.setUint32(16, 16, Endian.little);
+    header.setUint16(20, 1, Endian.little);
+    header.setUint16(22, 1, Endian.little);
+    header.setUint32(24, sampleRate, Endian.little);
+    header.setUint32(28, sampleRate * 2, Endian.little);
+    header.setUint16(32, 2, Endian.little);
+    header.setUint16(34, 16, Endian.little);
+    header.setUint8(36, 0x64); header.setUint8(37, 0x61); header.setUint8(38, 0x74); header.setUint8(39, 0x61);
+    header.setUint32(40, pcmData.length, Endian.little);
+    final Uint8List result = Uint8List(44 + pcmData.length);
+    result.setAll(0, header.buffer.asUint8List());
+    result.setAll(44, pcmData);
+    return result;
   }
 
   @override
@@ -292,9 +395,6 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
 
                                 // 文本输入遮罩层
                                 if (_isTextInputOpen) _buildTextInputOverlay(),
-
-                                // Agent 输入遮罩层
-                                if (_isAgentInputOpen) _buildAgentInputOverlay(),
                               ],
                             ),
                           );
@@ -313,7 +413,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
 
   Widget _buildTopBar(ColorScheme colorScheme) {
     return Positioned(
-      top: 24,
+      top: 30,
       left: 16,
       right: 16,
       child: Row(
@@ -469,7 +569,10 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                               icon: Icons.support_agent_rounded, 
                               label: "Agent", 
                               onTap: () => _handleAction(() {
-                                setState(() => _isAgentInputOpen = true);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const AgentPage()),
+                                );
                               }),
                             ),
                             const SizedBox(width: 12),
@@ -692,79 +795,6 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                       }
                     },
                     child: const Text("确定"),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAgentInputOverlay() {
-    return Container(
-      color: Colors.black87,
-      child: Center(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 30),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.grey[900],
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white10),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.support_agent_rounded, color: Colors.pinkAccent),
-                  SizedBox(width: 8),
-                  Text("发送指令给 Iris Agent", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _translateInputController,
-                autofocus: true,
-                maxLines: 3,
-                minLines: 1,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: "例如：帮我把'猫'添加到生词本并读一下",
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () {
-                      setState(() => _isAgentInputOpen = false);
-                      _translateInputController.clear();
-                    },
-                    child: const Text("取消"),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.pinkAccent,
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      final text = _translateInputController.text.trim();
-                      if (text.isNotEmpty) {
-                        setState(() => _isAgentInputOpen = false);
-                        _controller.runAgentTask(text);
-                        _translateInputController.clear();
-                      }
-                    },
-                    child: const Text("执行任务"),
                   ),
                 ],
               ),
@@ -1252,55 +1282,189 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
     );
   }
 
+  void _showImageSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.white),
+              title: const Text("拍照", style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Colors.white),
+              title: const Text("相册", style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildInputBar(ColorScheme colorScheme) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (!_controller.isGenerating) ...[
-            Expanded(
-              child: TextField(
-                controller: _inputController,
-                focusNode: _focusNode,
-                style: const TextStyle(color: Colors.white),
-                keyboardType: TextInputType.multiline,
-                maxLines: 5,
-                minLines: 1,
-                decoration: InputDecoration(
-                  hintText: "想聊点什么？",
-                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
-                  filled: true,
-                  fillColor: Colors.black.withOpacity(0.5),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(25),
-                    borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(25),
-                    borderSide: BorderSide(color: colorScheme.primary),
+          if (_selectedImageBytes != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Stack(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: colorScheme.primary.withOpacity(0.5), width: 2),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.memory(_selectedImageBytes!, height: 80, fit: BoxFit.cover),
+                      ),
+                    ),
+                    Positioned(
+                      top: -4,
+                      right: -4,
+                      child: GestureDetector(
+                        onTap: () => setState(() {
+                          _selectedImageBytes = null;
+                          _selectedImageFile = null;
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle),
+                          child: const Icon(Icons.close, color: Colors.white, size: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!_isVoiceMode)
+                GestureDetector(
+                  onTap: _showImageSourceSheet,
+                  child: Container(
+                    height: 48,
+                    width: 48,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: colorScheme.primary.withOpacity(0.3)),
+                    ),
+                    child: const Icon(Icons.image_outlined, color: Colors.white, size: 24),
                   ),
                 ),
-                onSubmitted: (_) => _handleSend(),
+              Expanded(
+                child: _isVoiceMode
+                    ? GestureDetector(
+                        onLongPressStart: (_) => _startRecording(),
+                        onLongPressEnd: (_) => _stopAndSendRecording(),
+                        child: Container(
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: _isRecording ? Colors.redAccent : colorScheme.primary,
+                            borderRadius: BorderRadius.circular(25),
+                            boxShadow: [
+                              if (_isRecording) BoxShadow(color: Colors.redAccent.withOpacity(0.4), blurRadius: 10, spreadRadius: 2)
+                            ],
+                          ),
+                          child: Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(_isRecording ? Icons.stop_circle_outlined : Icons.mic_none_rounded, color: Colors.white),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _isRecording ? "正在录音...松开发送" : "按住 说话",
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                    : TextField(
+                        controller: _inputController,
+                        focusNode: _focusNode,
+                        style: const TextStyle(color: Colors.white),
+                        keyboardType: TextInputType.multiline,
+                        maxLines: 5,
+                        minLines: 1,
+                        decoration: InputDecoration(
+                          hintText: "想聊点什么？",
+                          hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+                          filled: true,
+                          fillColor: Colors.black.withOpacity(0.5),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(25),
+                            borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(25),
+                            borderSide: BorderSide(color: colorScheme.primary),
+                          ),
+                        ),
+                        onSubmitted: (_) => _handleSend(),
+                      ),
               ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          if (_controller.isGenerating) const Spacer(),
-          GestureDetector(
-            onTap: _controller.isGenerating ? _controller.stopSkillReply : _handleSend,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: colorScheme.primary,
-                shape: BoxShape.circle,
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {
+                  if (_controller.isGenerating) {
+                    _controller.stopSkillReply();
+                  } else {
+                    setState(() => _isVoiceMode = !_isVoiceMode);
+                  }
+                },
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: _controller.isGenerating ? Colors.transparent : colorScheme.primary.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: colorScheme.primary.withOpacity(0.3)),
+                  ),
+                  child: _controller.isGenerating
+                      ? const _BlinkingPauseIcon()
+                      : Icon(_isVoiceMode ? Icons.keyboard_alt_outlined : Icons.mic_none_rounded, color: Colors.white, size: 24),
+                ),
               ),
-              child: _controller.isGenerating
-                  ? const _BlinkingPauseIcon()
-                  : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
-            ),
+              if (!_isVoiceMode && !_controller.isGenerating) ...[
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _handleSend,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),

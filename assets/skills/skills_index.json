@@ -1,0 +1,27 @@
+[
+  {
+    "id": "searchWeb",
+    "name": "查询网络",
+    "description": "Query summary by searching from web."
+  },
+  {
+    "id": "addVocabulary",
+    "name": "添加生词",
+    "description": "Add a vocabulary to vocabulary notebook."
+  },
+  {
+    "id": "galGame",
+    "name": "旮旯给木",
+    "description": "Engage in role-playing of scene dialogue with user."
+  },
+  {
+    "id": "reciteVocabulary",
+    "name": "随机抽背",
+    "description": "Randomly select words from the vocabulary list to help users memorize them."
+  },
+  {
+    "id": "dialogueAdventure",
+    "name": "对话大冒险",
+    "description": "Practice polite expressions in Japanese conversations."
+  }
+]

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>便利店收银模拟</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; min-height: 100%; overflow-x: hidden; font-family: -apple-system, sans-serif; background: #000; color: #fff; }
+
+        /* 游戏主容器：动态背景图 */
+        #game-container { position: relative; width: 100%; min-height: 100vh; background-size: cover; background-position: center; transition: background-image 0.4s ease; }
+
+        /* 紧急催促红光闪烁层 */
+        #danger-flash { position: absolute; width: 100%; height: 100%; pointer-events: none; z-index: 1; opacity: 0; }
+        @keyframes flashAnimation {
+            0% { background: rgba(239, 68, 68, 0); }
+            50% { background: rgba(239, 68, 68, 0.25); }
+            100% { background: rgba(239, 68, 68, 0); }
+        }
+
+        /* 退出图标 */
+        #exit-btn { position: absolute; top: 16px; left: 16px; width: 36px; height: 36px; background: rgba(0, 0, 0, 0.4); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; border: 1px solid rgba(255, 255, 255, 0.2); }
+
+        /* 上部：店员询问区域 */
+        #clerk-panel { position: absolute; top: 20px; width: 100%; display: flex; flex-direction: column; align-items: center; padding: 0 24px; box-sizing: border-box; }
+        #clerk-title { font-size: 14px; color: #10b981; background: rgba(0,0,0,0.6); padding: 4px 12px; border-radius: 12px; font-weight: bold; margin-bottom: 12px; letter-spacing: 1px; }
+        #question-text { font-size: 20px; font-weight: bold; text-align: center; color: #ffffff; text-shadow: 0 4px 12px rgba(0,0,0,0.9); line-height: 1.5; background: rgba(0,0,0,0.4); padding: 12px 20px; border-radius: 16px; backdrop-filter: blur(4px); width: 85%; }
+
+        /* 下部：交互与选项区域 */
+        #action-panel { position: absolute; bottom: 40px; width: 100%; display: flex; flex-direction: column; align-items: center; padding: 0 24px; box-sizing: border-box; z-index: 2; }
+
+        /* 开始大按钮 */
+        #start-btn { width: 160px; height: 54px; background: #10b981; border: none; border-radius: 27px; color: #fff; font-size: 18px; font-weight: bold; cursor: pointer; box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4); transition: all 0.2s; }
+        #start-btn:active { transform: scale(0.95); background: #059669; }
+
+        /* 选项容器 */
+        #options-container { display: none; flex-direction: column; gap: 12px; width: 100%; max-width: 320px; }
+        .option-card { background: rgba(0, 0, 0, 0.7); border: 1px solid rgba(255, 255, 255, 0.15); padding: 14px 20px; border-radius: 16px; color: #f3f4f6; font-size: 14px; text-align: center; cursor: pointer; transition: all 0.2s ease; backdrop-filter: blur(12px); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .option-card:active { transform: scale(0.97); background: rgba(255, 255, 255, 0.1); border-color: #10b981; }
+
+        /* 全屏结算遮罩层（用于失败/成功/顺利） */
+        #result-overlay { display: none; position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.4s ease; }
+        #result-title { font-size: 64px; font-weight: 900; letter-spacing: 4px; text-shadow: 0 4px 20px rgba(0,0,0,0.6); transform: scale(0.7); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        #result-desc { font-size: 14px; color: #e5e7eb; margin-top: 12px; background: rgba(0,0,0,0.6); padding: 6px 16px; border-radius: 20px; backdrop-filter: blur(4px); }
+
+        /* 隐藏的音频标签 */
+        audio { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="danger-flash"></div>
+
+    <div id="exit-btn" onclick="triggerExit()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+    </div>
+
+    <div id="clerk-panel">
+        <div id="clerk-title">店員（店员）</div>
+        <div id="question-text">読み込み中...</div>
+    </div>
+
+    <div id="action-panel">
+        <button id="start-btn" onclick="startGame()">来店（开始）</button>
+        <div id="options-container">
+            <div class="option-card" onclick="selectOption('polite')" id="opt-polite"></div>
+            <div class="option-card" onclick="selectOption('normal')" id="opt-normal"></div>
+            <div class="option-card" onclick="selectOption('rude')" id="opt-rude"></div>
+        </div>
+    </div>
+
+    <div id="result-overlay">
+        <div id="result-title"></div>
+        <div id="result-desc"></div>
+    </div>
+</div>
+
+<audio id="snd-rush" src="sounds/Iris_rush.mp3" preload="auto"></audio>
+<audio id="snd-happy" src="sounds/Iris_happy.mp3" preload="auto"></audio>
+<audio id="snd-normal" src="sounds/Iris_normal.mp3" preload="auto"></audio>
+<audio id="snd-angry" src="sounds/Iris_angry.mp3" preload="auto"></audio>
+
+<script src="index.js"></script>
+</body>
+</html>

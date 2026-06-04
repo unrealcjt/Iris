@@ -36,13 +36,16 @@ android {
 
     buildTypes {
         release {
-            // 确保启用了签名配置（如果你配置了的话）
+            // 确保启用了签名配置
             signingConfig = signingConfigs.getByName("debug")
 
             // 正式版的应用名称
             resValue("string", "app_name", "Iris")
 
-            // 🛠️ 关键：确保有下面这一行来加载 proguard-rules.pro
+            // 🛠️ 关键修复：禁用混淆和资源压缩，解决 Release 模式插件通信失败 (channel-error)
+            isMinifyEnabled = false
+            isShrinkResources = false
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

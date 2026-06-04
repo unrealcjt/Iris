@@ -36,23 +36,35 @@ class GemmaSkill {
     Uint8List? audioBytes,
     double temperature = 1.0,
     int topK = 64,
-    double topP = 0.95
+    double topP = 0.95,
+    bool? enableThinking
   }) async* {
     if (_currentModel == null) {
       yield "错误：模型未初始化";
       return;
     }
-    
-    _activeSession = await _currentModel!.createSession(
-      temperature: temperature,
-      topK: topK,
-      topP: topP,
-      enableVisionModality: imageBytes != null,
-      enableAudioModality: audioBytes != null,
-      enableThinking: MascotController().isThinkingMode,
-      systemInstruction: "Output strictly in the format specified by the user's prompt words. Prohibit any greetings outside the specified format."
-    );
-    print(MascotController().isThinkingMode);
+
+    if (imageBytes == null && audioBytes == null) {
+      _activeSession = await _currentModel!.openSession(
+          temperature: temperature,
+          topK: topK,
+          topP: topP,
+          enableVisionModality: imageBytes != null,
+          enableAudioModality: audioBytes != null,
+          enableThinking: enableThinking == null ? MascotController().isThinkingMode : enableThinking,
+          systemInstruction: "Output strictly in the format specified by the user's prompt words. Prohibit any greetings outside the specified format."
+      );
+    } else {
+      _activeSession = await _currentModel!.createSession(
+          temperature: temperature,
+          topK: topK,
+          topP: topP,
+          enableVisionModality: imageBytes != null,
+          enableAudioModality: audioBytes != null,
+          enableThinking: enableThinking == null ? MascotController().isThinkingMode : enableThinking,
+          systemInstruction: "Output strictly in the format specified by the user's prompt words. Prohibit any greetings outside the specified format."
+      );
+    }
 
     Message message;
     if (imageBytes != null) {
@@ -89,6 +101,14 @@ class GemmaSkill {
     } catch (e) {
       debugPrint("GemmaSkill 关闭失败: $e");
     }
+  }
+
+  /// 纯语音转文字 (利用多模态音频输入)
+  Stream<String> transcribeSpeech({required Uint8List audioBytes}) {
+    return _generate(
+      prompt: "Transcribe this Japanese audio into text accurately. Output only the transcription, no translation.",
+      audioBytes: audioBytes,
+    );
   }
 
   // ================= 观世 (Vision) =================
@@ -260,7 +280,7 @@ Output format (Chinese reply):
     return _generate(prompt: prompt);
   }
   /// 日语翻译
-  Stream<String> japaneseTranslate({required String content, String targetLang = "中文"}) {
+  Stream<String> japaneseTranslate({required String content, String targetLang = "Chinese"}) {
     return _generate(
       prompt: """
 Translate the '$content' into $targetLang.
@@ -280,6 +300,7 @@ When formatting the answer, output the the translation only.
   Stream<String> exampleSentence() {
     return _generate(
       prompt: "Give me a concise Japanese example sentence. just reply the sentence. now is ${DateTime.now().millisecondsSinceEpoch}",
+      enableThinking: false
     );
   }
 
@@ -287,6 +308,7 @@ When formatting the answer, output the the translation only.
   Stream<String> exampleSentenceByWord({required String word}) {
     return _generate(
       prompt: "Generate a random Japanese sentence using '$word'. now is ${DateTime.now().millisecondsSinceEpoch}",
+      enableThinking: false
     );
   }
 

@@ -289,7 +289,13 @@ class IrisTools {
 
   Future<Map<String, dynamic>> RunJs(Map<String, dynamic> args) async {
     final webName = args['js'] as String?;
-    final data = args['data'] as String? ?? "{}";
+    dynamic rawData = args['data'];
+    String data;
+    if (rawData is Map) {
+      data = jsonEncode(rawData);
+    } else {
+      data = rawData as String? ?? "{}";
+    }
     
     if (webName == null) {
       return {"status": "error", "message": "Missing 'js' (webName) parameter"};

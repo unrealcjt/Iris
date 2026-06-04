@@ -11,6 +11,8 @@ class AgentTurn {
   String? activeTool;
   bool isRunning;
   Map<String, dynamic>? webViewData;
+  double webViewHeight = 300.0; // 记录高度
+  String? lastSyncedJson; // 记录上次同步的 JSON，防止重复
 
   AgentTurn({
     required this.userTask,
@@ -104,6 +106,11 @@ After this step you MUST go to next step. You MUST NOT use `run_intent` under an
       activeTurn = _history.lastWhere((t) => t.webViewData != null);
       activeTurn.thinking = "";
       activeTurn.answer = "";
+      activeTurn.lastSyncedJson = null; // 重置同步标记，允许新一轮同步
+      // 关键修复：清除旧的同步数据，防止新任务开始时 WebView 频繁回跳到旧状态
+      if (activeTurn.webViewData != null) {
+        activeTurn.webViewData!['jsonData'] = null;
+      }
       activeTurn.isRunning = true;
     } else {
       // 普通模式：新增一轮

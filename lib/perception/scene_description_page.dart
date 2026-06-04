@@ -36,13 +36,18 @@ class _SceneDescriptionPageState extends VisionBaseState<SceneDescriptionPage> {
 
       final stream = _gemmaSkill.describeScene(imageBytes: imageBytes!);
       await for (final chunk in stream) {
-        setState(() {
-          if (visionState == VisionState.processing) {
-            visionState = VisionState.result;
-          }
+        if (chunk.endsWith('<channel|>')) {
+          continue;
+        }
+        else {
+          setState(() {
+            if (visionState == VisionState.processing) {
+              visionState = VisionState.result;
+            }
 
-          resultText += chunk;
-        });
+            resultText += chunk;
+          });
+        }
       }
       setState(() {
         visionState = VisionState.result;

@@ -32,6 +32,9 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
   bool _isLanguageSelectionOpen = false; // 用于控制翻译语言选择界面的显示
   bool _isTextInputOpen = false; // 用于控制翻译文本输入界面的显示
   bool _isActionMenuOpen = false; // 用于控制功能集菜单的展开
+  bool _isGojuonOpen = false; // 用于控制五十音界面的显示
+  bool _isDailyTipOpen = false; // 用于控制小知识界面的显示
+  bool _isImageSourceOpen = false; // 用于控制图片来源选择的显示
 
   // --- 多模态输入状态 ---
   final ImagePicker _picker = ImagePicker();
@@ -86,16 +89,21 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
       _isLanguageSelectionOpen = false;
       _isTextInputOpen = false;
       _isActionMenuOpen = false;
+      _isGojuonOpen = false;
+      _isDailyTipOpen = false;
+      _isImageSourceOpen = false;
       _translateInputController.clear();
       _selectedImageBytes = null;
       _selectedImageFile = null;
       _isVoiceMode = false;
       _isRecording = false;
     }
+
     _wasExpanded = _controller.isExpanded;
 
+    // 只要控制器通知了变化，就刷新 UI，以响应拖动、模式切换等所有状态
     setState(() {});
-    
+
     if (_controller.isExpanded) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _scrollController.hasClients && !_scrollController.position.isScrollingNotifier.value) {
@@ -236,8 +244,14 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
 
     return Stack(
       children: [
+        // 关键修复：当 Mascot 处于非全屏状态（悬浮球）时，其父 Stack 尺寸可能为 0x0。
+        // 添加一个透明且忽略点击的占位，强制让 Stack 充满全屏，从而使其子项（Positioned）能够接收点击和拖动事件。
+        if (_controller.isVisible)
+          const IgnorePointer(child: SizedBox.expand()),
+
         if (_controller.isExpanded && _controller.isVisible)
           GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: () {
               _focusNode.unfocus();
               _controller.setExpanded(false);
@@ -254,9 +268,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
         if (_controller.isExpanded && _controller.isVisible) _buildExpandedPanel(context, colorScheme),
 
         if (!_controller.isExpanded && _controller.isVisible)
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.elasticOut,
+          Positioned(
             left: targetLeft,
             top: targetTop,
             child: _buildOrb(colorScheme),
@@ -296,8 +308,8 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
             child: Image.asset(
               'assets/img/Iris_Scarlet.png',
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => 
-                Icon(Icons.auto_awesome, color: colorScheme.primary, size: 30),
+              errorBuilder: (context, error, stackTrace) =>
+                  Icon(Icons.auto_awesome, color: colorScheme.primary, size: 30),
             ),
           ),
         ),
@@ -327,7 +339,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
           child: Stack(
             children: [
               Positioned.fill(child: _buildDynamicBackground()),
-              
+
               // 关键：仅保留 Overlay 以支持 Tooltip/TextField，移除 Navigator
               Positioned.fill(
                 child: Overlay(
@@ -358,8 +370,11 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                                 if (_controller.assistantMode == MascotAssistantMode.assistant)
                                   _buildAssistantActions(),
 
-                                Align(
-                                  alignment: Alignment.bottomCenter,
+                                // 底部对话与输入区：使用 Positioned 替代 Align，避免全屏透明层拦截点击事件
+                                Positioned(
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -389,12 +404,21 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
 
                                 // 自定义模型选择遮罩层，取代 showDialog
                                 if (_isModelSelectionOpen) _buildModelSelectionOverlay(),
-                                
+
                                 // 语言选择遮罩层
                                 if (_isLanguageSelectionOpen) _buildLanguageSelectionOverlay(),
 
                                 // 文本输入遮罩层
                                 if (_isTextInputOpen) _buildTextInputOverlay(),
+
+                                // 五十音遮罩层
+                                if (_isGojuonOpen) _buildGojuonOverlay(),
+
+                                // 小知识遮罩层
+                                if (_isDailyTipOpen) _buildDailyTipOverlay(),
+
+                                // 图片来源选择遮罩层
+                                if (_isImageSourceOpen) _buildImageSourceOverlay(),
                               ],
                             ),
                           );
@@ -517,13 +541,12 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
         children: [
           // 五十音弹窗层
           GestureDetector(
-            onTap: () => setState(() {
-              _showGojuonDialog(context);
-            }),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _isGojuonOpen = true),
             child: _buildQuickAction(Icons.grid_4x4_rounded, "五十音"),
           ),
           const SizedBox(height: 12),
-          
+
           // 功能集：使用 Row 确保所有子项都在 HitTest 区域内
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -542,20 +565,20 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _buildSubAction(
-                              icon: Icons.analytics_outlined, 
-                              label: "分析", 
+                              icon: Icons.analytics_outlined,
+                              label: "分析",
                               onTap: () => _handleAction(() => _controller.analyzeGrammar()),
                             ),
                             const SizedBox(width: 12),
                             _buildSubAction(
-                              icon: Icons.volume_up_outlined, 
-                              label: "朗读", 
+                              icon: Icons.volume_up_outlined,
+                              label: "朗读",
                               onTap: () => _handleAction(() => _controller.speakHelpText()),
                             ),
                             const SizedBox(width: 12),
                             _buildSubAction(
-                              icon: Icons.translate_rounded, 
-                              label: "翻译", 
+                              icon: Icons.translate_rounded,
+                              label: "翻译",
                               onTap: () => _handleAction(() {
                                 if (_controller.helpText.isEmpty) {
                                   setState(() => _isTextInputOpen = true);
@@ -566,11 +589,11 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                             ),
                             const SizedBox(width: 12),
                             _buildSubAction(
-                              icon: Icons.support_agent_rounded, 
-                              label: "Agent", 
+                              icon: Icons.support_agent_rounded,
+                              label: "Agent",
                               onTap: () => _handleAction(() {
-                                Navigator.push(
-                                  context,
+                                _controller.setExpanded(false); // 导航前收起
+                                _controller.navigatorKey.currentState?.push(
                                   MaterialPageRoute(builder: (context) => const AgentPage()),
                                 );
                               }),
@@ -582,12 +605,13 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                     );
                   },
                 ),
-              
+
               // 主按钮
               GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () => setState(() => _isActionMenuOpen = !_isActionMenuOpen),
                 child: _buildQuickAction(
-                  _isActionMenuOpen ? Icons.close : Icons.auto_awesome_motion_rounded, 
+                  _isActionMenuOpen ? Icons.close : Icons.auto_awesome_motion_rounded,
                   _isActionMenuOpen ? "收起" : "快捷",
                   active: _isActionMenuOpen,
                 ),
@@ -597,7 +621,8 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
 
           const SizedBox(height: 12),
           GestureDetector(
-            onTap: () => _showDailyTip(context),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _isDailyTipOpen = true),
             child: _buildQuickAction(Icons.lightbulb_outline, "小知识"),
           ),
         ],
@@ -656,9 +681,9 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                         if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                           return const Center(child: CircularProgressIndicator(color: Colors.amber));
                         }
-                        
+
                         final tip = snapshot.data ?? "";
-                        
+
                         return SingleChildScrollView(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -712,9 +737,122 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
     );
   }
 
+  Widget _buildGojuonOverlay() {
+    return Container(
+      color: Colors.black87,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GojuonPanel(
+              onCharTap: (hira) {
+                _controller.speak(hira);
+              },
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.pinkAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+              ),
+              onPressed: () => setState(() => _isGojuonOpen = false),
+              child: const Text("返回", style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDailyTipOverlay() {
+    return Container(
+      color: Colors.black87,
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 32),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFDF8E1),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(color: Colors.amber, width: 3),
+            boxShadow: [
+              BoxShadow(color: Colors.amber.withOpacity(0.3), blurRadius: 20, spreadRadius: 5)
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.lightbulb_rounded, color: Colors.amber, size: 32),
+                    const SizedBox(width: 12),
+                    Text(
+                      "今日日语小贴士",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.brown[800],
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const Divider(color: Colors.amber, thickness: 1),
+                const SizedBox(height: 16),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 300, minHeight: 100),
+                  child: StreamBuilder<String>(
+                    stream: _controller.getDailyTipStream(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator(color: Colors.amber));
+                      }
+                      final tip = snapshot.data ?? "";
+                      return SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            MarkdownBody(
+                              data: tip,
+                              styleSheet: MarkdownStyleSheet(
+                                p: TextStyle(fontSize: 16, color: Colors.brown[900], height: 1.6),
+                                strong: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    foregroundColor: Colors.brown[900],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                  ),
+                  onPressed: () => setState(() => _isDailyTipOpen = false),
+                  child: const Text("我知道了！", style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // 子功能按钮组件
   Widget _buildSubAction({required IconData icon, required String label, required VoidCallback onTap}) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Column(
         children: [
@@ -937,26 +1075,12 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text("运行模式", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: DropdownButton<bool>(
-                      value: _controller.isThinkingMode,
-                      dropdownColor: Colors.grey[900],
-                      underline: const SizedBox(),
-                      style: const TextStyle(color: Colors.pinkAccent, fontSize: 13, fontWeight: FontWeight.bold),
-                      items: const [
-                        DropdownMenuItem(value: false, child: Text("快速模式")),
-                        DropdownMenuItem(value: true, child: Text("思考模式")),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) _controller.setThinkingMode(val);
-                      },
-                    ),
+                  Row(
+                    children: [
+                      _buildModeToggleButton("快速", false),
+                      const SizedBox(width: 8),
+                      _buildModeToggleButton("思考", true),
+                    ],
                   ),
                 ],
               ),
@@ -974,6 +1098,29 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeToggleButton(String label, bool value) {
+    final isSelected = _controller.isThinkingMode == value;
+    return GestureDetector(
+      onTap: () => _controller.setThinkingMode(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.pinkAccent : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isSelected ? Colors.pinkAccent : Colors.white10),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.white70,
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
         ),
       ),
@@ -1061,6 +1208,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
 
   Widget _buildTopIconButton({required IconData icon, required VoidCallback onTap, String? tooltip}) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Tooltip(
         message: tooltip ?? "",
@@ -1096,6 +1244,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
       children: [
         Container(
           width: double.infinity,
+          height: 48, // 增加固定高度确保 Stack 内部图标不溢出且可点击
           padding: const EdgeInsets.fromLTRB(0, 10, 0, 0),
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -1106,6 +1255,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
           ),
           child: Stack(
             alignment: Alignment.center,
+            clipBehavior: Clip.none,
             children: [
               Text(
                 "Iris",
@@ -1124,11 +1274,15 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                 Positioned(
                   right: 16,
                   child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: _controller.playExistedAudioSegments,
-                    child: const Icon(
-                      Icons.volume_up_rounded,
-                      color: Colors.white,
-                      size: 20,
+                    child: const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Icon(
+                        Icons.volume_up_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
                   ),
                 ),
@@ -1137,13 +1291,17 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                   Positioned(
                     right: 16,
                     child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
                       onTap: () {
                         _controller.stopSkillReply();
                       },
-                      child: const Icon(
-                        Icons.stop,
-                        color: Colors.red,
-                        size: 30,
+                      child: const Padding(
+                        padding: EdgeInsets.all(4.0),
+                        child: Icon(
+                          Icons.stop,
+                          color: Colors.red,
+                          size: 30,
+                        ),
                       ),
                     ),
                   )
@@ -1151,13 +1309,17 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
                   Positioned(
                     right: 16,
                     child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
                       onTap: () {
                         _controller.refreshAssistText();
                       },
-                      child: const Icon(
-                        Icons.refresh,
-                        color: Colors.white,
-                        size: 30,
+                      child: const Padding(
+                        padding: EdgeInsets.all(4.0),
+                        child: Icon(
+                          Icons.refresh,
+                          color: Colors.white,
+                          size: 30,
+                        ),
                       ),
                     ),
                   ),
@@ -1192,31 +1354,31 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
               padding: const EdgeInsets.fromLTRB(16, 5, 16, 30),
               child: _controller.isGenerating && _controller.currentDialogueText.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(height: 20),
-                          const _TypingIndicator(),
-                          const SizedBox(height: 12),
-                          Text(
-                            "Iris 正在思考...",
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
-                              fontSize: 14,
-                              fontStyle: FontStyle.italic,
-                              shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  :
-                    IrisSelectionArea(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: _buildDialogueContent(_controller.currentDialogueText, colorScheme),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 20),
+                    const _TypingIndicator(),
+                    const SizedBox(height: 12),
+                    Text(
+                      "Iris 正在思考...",
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 14,
+                        fontStyle: FontStyle.italic,
+                        shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
                       ),
                     ),
+                  ],
+                ),
+              )
+                  :
+              IrisSelectionArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _buildDialogueContent(_controller.currentDialogueText, colorScheme),
+                ),
+              ),
             ),
           ),
         ),
@@ -1237,7 +1399,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
 
     final regExp = RegExp(r'<think>([\s\S]*?)<\/think>');
     final match = regExp.firstMatch(raw);
-    
+
     if (match == null) {
       return [
         MarkdownBody(
@@ -1283,31 +1445,49 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
   }
 
   void _showImageSourceSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt, color: Colors.white),
-              title: const Text("拍照", style: TextStyle(color: Colors.white)),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.camera);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library, color: Colors.white),
-              title: const Text("相册", style: TextStyle(color: Colors.white)),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(ImageSource.gallery);
-              },
-            ),
-          ],
+    setState(() => _isImageSourceOpen = true);
+  }
+
+  Widget _buildImageSourceOverlay() {
+    return Container(
+      color: Colors.black87,
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 40),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.grey[900],
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("选择图片来源", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: Colors.pinkAccent),
+                title: const Text("拍照", style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  setState(() => _isImageSourceOpen = false);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.pinkAccent),
+                title: const Text("相册", style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  setState(() => _isImageSourceOpen = false);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => setState(() => _isImageSourceOpen = false),
+                child: const Text("取消"),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1360,6 +1540,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
             children: [
               if (!_isVoiceMode)
                 GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: _showImageSourceSheet,
                   child: Container(
                     height: 48,
@@ -1376,59 +1557,60 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
               Expanded(
                 child: _isVoiceMode
                     ? GestureDetector(
-                        onLongPressStart: (_) => _startRecording(),
-                        onLongPressEnd: (_) => _stopAndSendRecording(),
-                        child: Container(
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: _isRecording ? Colors.redAccent : colorScheme.primary,
-                            borderRadius: BorderRadius.circular(25),
-                            boxShadow: [
-                              if (_isRecording) BoxShadow(color: Colors.redAccent.withOpacity(0.4), blurRadius: 10, spreadRadius: 2)
-                            ],
+                  onLongPressStart: (_) => _startRecording(),
+                  onLongPressEnd: (_) => _stopAndSendRecording(),
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: _isRecording ? Colors.redAccent : colorScheme.primary,
+                      borderRadius: BorderRadius.circular(25),
+                      boxShadow: [
+                        if (_isRecording) BoxShadow(color: Colors.redAccent.withOpacity(0.4), blurRadius: 10, spreadRadius: 2)
+                      ],
+                    ),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(_isRecording ? Icons.stop_circle_outlined : Icons.mic_none_rounded, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text(
+                            _isRecording ? "正在录音...松开发送" : "按住 说话",
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                           ),
-                          child: Center(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(_isRecording ? Icons.stop_circle_outlined : Icons.mic_none_rounded, color: Colors.white),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _isRecording ? "正在录音...松开发送" : "按住 说话",
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      )
-                    : TextField(
-                        controller: _inputController,
-                        focusNode: _focusNode,
-                        style: const TextStyle(color: Colors.white),
-                        keyboardType: TextInputType.multiline,
-                        maxLines: 5,
-                        minLines: 1,
-                        decoration: InputDecoration(
-                          hintText: "想聊点什么？",
-                          hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
-                          filled: true,
-                          fillColor: Colors.black.withOpacity(0.5),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(25),
-                            borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(25),
-                            borderSide: BorderSide(color: colorScheme.primary),
-                          ),
-                        ),
-                        onSubmitted: (_) => _handleSend(),
+                        ],
                       ),
+                    ),
+                  ),
+                )
+                    : TextField(
+                  controller: _inputController,
+                  focusNode: _focusNode,
+                  style: const TextStyle(color: Colors.white),
+                  keyboardType: TextInputType.multiline,
+                  maxLines: 5,
+                  minLines: 1,
+                  decoration: InputDecoration(
+                    hintText: "想聊点什么？",
+                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+                    filled: true,
+                    fillColor: Colors.black.withOpacity(0.5),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(25),
+                      borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(25),
+                      borderSide: BorderSide(color: colorScheme.primary),
+                    ),
+                  ),
+                  onSubmitted: (_) => _handleSend(),
+                ),
               ),
               const SizedBox(width: 8),
               GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () {
                   if (_controller.isGenerating) {
                     _controller.stopSkillReply();
@@ -1452,6 +1634,7 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
               if (!_isVoiceMode && !_controller.isGenerating) ...[
                 const SizedBox(width: 8),
                 GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: _handleSend,
                   child: Container(
                     width: 48,
@@ -1490,50 +1673,50 @@ class _IrisMascotOverlayState extends State<IrisMascotOverlay> {
           const Divider(color: Colors.white12),
           Expanded(
             child: ListView.builder(
-                      itemCount: _controller.chatMessages.length,
-                      itemBuilder: (context, index) {
-                        final msg = _controller.chatMessages[index];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12.0),
-                          child: Column(
-                            crossAxisAlignment: msg.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                            children: [
-                              Text(msg.isUser ? "You" : "Iris", 
-                                style: TextStyle(color: msg.isUser ? Colors.white38 : colorScheme.primary, fontSize: 11, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: msg.isUser ? colorScheme.primary.withOpacity(0.2) : Colors.white.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: Colors.white10),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    ..._buildDialogueContent(msg.text ?? "", colorScheme),
-                                    if (!msg.isUser && _controller.getMessageSpeed(index) != null)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 8.0),
-                                        child: Align(
-                                          alignment: Alignment.bottomRight,
-                                          child: Text(
-                                            "${_controller.getMessageSpeed(index)!.toStringAsFixed(1)} tokens/s",
-                                            style: TextStyle(
-                                              color: colorScheme.primary.withOpacity(0.5),
-                                              fontSize: 10,
-                                              fontStyle: FontStyle.italic,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+              itemCount: _controller.chatMessages.length,
+              itemBuilder: (context, index) {
+                final msg = _controller.chatMessages[index];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12.0),
+                  child: Column(
+                    crossAxisAlignment: msg.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    children: [
+                      Text(msg.isUser ? "You" : "Iris",
+                          style: TextStyle(color: msg.isUser ? Colors.white38 : colorScheme.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: msg.isUser ? colorScheme.primary.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ..._buildDialogueContent(msg.text ?? "", colorScheme),
+                            if (!msg.isUser && _controller.getMessageSpeed(index) != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Align(
+                                  alignment: Alignment.bottomRight,
+                                  child: Text(
+                                    "${_controller.getMessageSpeed(index)!.toStringAsFixed(1)} tokens/s",
+                                    style: TextStyle(
+                                      color: colorScheme.primary.withOpacity(0.5),
+                                      fontSize: 10,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ],
-                          ),
-                        );
-                      },
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],

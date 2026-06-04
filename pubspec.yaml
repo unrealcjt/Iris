@@ -57,8 +57,9 @@ dependencies:
       url: https://github.com/twn39/edgetts-dart.git
   flutter_tts: ^4.2.0
   flutter_native_splash: ^2.4.7
-  webview_flutter: ^4.10.0
-
+  flutter_inappwebview: ^6.1.5
+  # 推荐改用这个发布在 pub.dev 上的现代维护版
+  ffmpeg_kit_flutter_new: ^4.2.0
   sqflite_common_ffi: any
 dependency_overrides:
   record_platform_interface: 1.4.0
@@ -111,6 +112,9 @@ flutter:
     - assets/skills/galGame/
     - assets/skills/galGame/images/
     - assets/skills/reciteVocabulary/
+    - assets/skills/dialogueAdventure/
+    - assets/skills/dialogueAdventure/images/
+    - assets/skills/dialogueAdventure/sounds/
 
 flutter_native_splash:
   color: "#d3d4cf"           # 背景颜色

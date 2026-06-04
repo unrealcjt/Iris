@@ -17,6 +17,8 @@ class MascotController extends ChangeNotifier {
   factory MascotController() => _instance;
   MascotController._internal();
 
+  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
   InferenceModel? _model;
   InferenceModel? get model => _model;
 
@@ -27,6 +29,11 @@ class MascotController extends ChangeNotifier {
     await _loadSettings();
     await _initModel(maxTokens: _maxTokens);
     _ttsService.isPlayingNotifier.addListener(_onTtsStatusChanged);
+    _isInitialized = true; // 标记初始化已完成
+    
+    // 🛠️ 关键修复：初始化完成后，主动检查当前路由状态以显示看板娘
+    setVisible(true);
+    notifyListeners();
   }
 
   MascotDisplayMode _mode = MascotDisplayMode.docked;
@@ -45,20 +52,38 @@ class MascotController extends ChangeNotifier {
   List<File> get availableModels => _availableModels;
 
   void updateRoute(Route? route) {
-    // 如果是第一层路由（主页），则停靠并确保可见
-    if (route != null && route.isFirst) {
-      setVisible(true); // 回到主页时强制恢复可见
-      setMode(MascotDisplayMode.docked);
-    } else {
-      setMode(MascotDisplayMode.floating);
-    }
+    // 异步执行，防止在 build 期间触发 notifyListeners 导致 Release 模式死锁
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isInitialized) {
+        setVisible(false);
+        return;
+      }
+
+      setVisible(true);
+
+      // 仅当路由为全屏页面且不是 Dialog/BottomSheet 等弹窗时，才进行模式判断
+      if (route is PageRoute) {
+        if (route.isFirst) {
+          setMode(MascotDisplayMode.docked);
+        } else {
+          setMode(MascotDisplayMode.floating);
+        }
+      }
+      // 如果 route 为 null (通常是 pop 到了最后一个页面) 默认设为 docked
+      else if (route == null) {
+        setMode(MascotDisplayMode.docked);
+      }
+    });
   }
 
   bool _isExpanded = false;
   bool get isExpanded => _isExpanded;
 
-  bool _isVisible = true;
+  bool _isVisible = false; // 初始设为隐藏
   bool get isVisible => _isVisible;
+
+  bool _isInitialized = false;
+  bool get isInitialized => _isInitialized; // 公开初始化状态
 
   void setVisible(bool visible) {
     if (_isVisible != visible) {

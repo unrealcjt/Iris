@@ -1,7 +1,7 @@
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'iris_agent.dart';
 import 'mascot_controller.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -94,9 +94,9 @@ class _AgentPageState extends State<AgentPage> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.4),
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.8),
+                    Colors.black.withValues(alpha: 0.4),
+                    Colors.black.withValues(alpha: 0.6),
+                    Colors.black.withValues(alpha: 0.8),
                   ],
                 ),
               ),
@@ -137,11 +137,11 @@ class _AgentPageState extends State<AgentPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.auto_awesome, size: 64, color: Colors.pinkAccent.withOpacity(0.3)),
+          Icon(Icons.auto_awesome, size: 64, color: Colors.pinkAccent.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
-          Text("我是 Iris Agent", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 18)),
+          Text("我是 Iris Agent", style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 18)),
           const SizedBox(height: 8),
-          Text("你可以让我帮你处理复杂的工具调用任务", style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14)),
+          Text("你可以让我帮你处理复杂的工具调用任务", style: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 14)),
         ],
       ),
     );
@@ -190,7 +190,7 @@ class _AgentPageState extends State<AgentPage> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text("Iris", style: TextStyle(color: Colors.white.withOpacity(0.7), fontWeight: FontWeight.bold)),
+                    Text("Iris", style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontWeight: FontWeight.bold)),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -220,9 +220,9 @@ class _AgentPageState extends State<AgentPage> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.blueAccent.withOpacity(0.1),
+        color: Colors.blueAccent.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+        border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -250,7 +250,7 @@ class _AgentPageState extends State<AgentPage> {
       padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(context).padding.bottom + 16),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E1E),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, -2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, -2))],
       ),
       child: Row(
         children: [
@@ -266,7 +266,7 @@ class _AgentPageState extends State<AgentPage> {
                 hintStyle: const TextStyle(color: Colors.white38),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.08),
+                fillColor: Colors.white.withValues(alpha: 0.08),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
             ),
@@ -301,98 +301,85 @@ class _AgentPageState extends State<AgentPage> {
 class _WebViewMessage extends StatefulWidget {
   final Map<String, dynamic> data;
   final IrisAgent agent;
-  final bool isFullScreen;
   const _WebViewMessage({
     required this.data, 
     required this.agent, 
-    this.isFullScreen = false
   });
 
   @override
   State<_WebViewMessage> createState() => _WebViewMessageState();
 }
 
-class _WebViewMessageState extends State<_WebViewMessage> {
-  late final WebViewController _controller;
+class _WebViewMessageState extends State<_WebViewMessage> with AutomaticKeepAliveClientMixin {
+  InAppWebViewController? _webViewController;
   late final VoidCallback _agentListener;
   bool _isPageFinished = false;
-  double _height = 300; // 默认初始高度
+
+  @override
+  bool get wantKeepAlive => true; 
+
+  // 获取该消息对应的原始数据模型
+  AgentTurn get _turn => widget.agent.history.lastWhere((t) => t.webViewData == widget.data);
 
   @override
   void initState() {
     super.initState();
 
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0x00000000))
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (String url) async {
-            setState(() => _isPageFinished = true);
-            // 初始化同步
-            final jsonData = widget.data['jsonData'] ?? "{}";
-            _controller.runJavaScript("if(window.onReceiveModelAction) window.onReceiveModelAction('$jsonData');");
-            
-            // 获取页面内容高度并更新
-            _updateHeight();
-          },
-        ),
-      )
-      ..addJavaScriptChannel(
-        'FlutterAgentBridge',
-        onMessageReceived: (JavaScriptMessage message) {
-          try {
-            final data = jsonDecode(message.message);
-            if (data['action'] == 'exit_roleplay') {
-              widget.agent.injectInfo("Role play has ended, Now recover the identity of AI assistant.");
-              widget.agent.isRoleplaying = false;
-            } else if (data['action'] == 'update_height') {
-              // 允许网页主动通知高度变化
-              if (data['height'] != null) {
-                setState(() => _height = (data['height'] as num).toDouble());
-              }
-            }
-          } catch (e) {
-            debugPrint("解析 WebView 网页失败: $e");
-          }
-        },
-      )
-      ..loadFlutterAsset(widget.data['htmlPath']);
-
     // 监听后续模型回复
     _agentListener = () {
-      if (widget.agent.isRoleplaying && _isPageFinished && widget.agent.history.isNotEmpty) {
+      if (widget.agent.isRoleplaying && _isPageFinished && widget.agent.history.isNotEmpty && _webViewController != null) {
         final lastTurn = widget.agent.history.last;
         
+        // 我们只同步“属于本 WebView 所在轮次”的数据
+        if (lastTurn != _turn) return;
+
         String? dataToSync;
-        if (lastTurn.webViewData != null && lastTurn.webViewData!['jsonData'] != null) {
+        // 优先从最新的 answer 中提取 JSON
+        final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(lastTurn.answer);
+        
+        if (jsonMatch != null) {
+          dataToSync = jsonMatch.group(0);
+        } else if (lastTurn.webViewData != null && lastTurn.webViewData!['jsonData'] != null) {
           dataToSync = lastTurn.webViewData!['jsonData'];
-        } else if (lastTurn.answer.trim().startsWith('{') && lastTurn.answer.trim().endsWith('}')) {
-          dataToSync = lastTurn.answer.trim();
         }
 
-        if (dataToSync != null) {
-          final escapedData = jsonEncode(dataToSync);
-          _controller.runJavaScript("if(window.onReceiveModelAction) window.onReceiveModelAction($escapedData);");
-          // 数据同步后可能引起 DOM 变化，尝试更新高度
-          Future.delayed(const Duration(milliseconds: 200), _updateHeight);
+        // 仅在数据完整且发生变化时同步
+        if (dataToSync != null && _isValidJson(dataToSync) && dataToSync != _turn.lastSyncedJson) {
+          _turn.lastSyncedJson = dataToSync;
+          final escapedJson = jsonEncode(dataToSync);
+          _webViewController?.evaluateJavascript(source: "if(window.onReceiveModelAction) window.onReceiveModelAction($escapedJson);");
+          
+          final webName = widget.data['webName'] ?? "";
+          if (webName != 'galGame' && webName != 'dialogueAdventure') {
+            Future.delayed(const Duration(milliseconds: 200), _updateHeight);
+          }
         }
       }
     };
     widget.agent.addListener(_agentListener);
   }
 
-  Future<void> _updateHeight() async {
+  bool _isValidJson(String str) {
     try {
-      final String heightStr = await _controller.runJavaScriptReturningResult(
-        "document.documentElement.scrollHeight.toString()"
-      ) as String;
-      // 去掉引号
+      jsonDecode(str);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _updateHeight() async {
+    if (_webViewController == null) return;
+    try {
+      final result = await _webViewController!.evaluateJavascript(
+        source: "document.documentElement.scrollHeight.toString()"
+      );
+      if (result == null) return;
+      final String heightStr = result.toString();
       final double? height = double.tryParse(heightStr.replaceAll('"', ''));
       if (height != null && height > 0 && mounted) {
         setState(() {
-          // 限制最小高度和最大高度，防止极端情况
-          _height = height.clamp(100.0, 800.0);
+          _turn.webViewHeight = height.clamp(100.0, 800.0);
         });
       }
     } catch (e) {
@@ -408,17 +395,67 @@ class _WebViewMessageState extends State<_WebViewMessage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      height: _height,
+      height: _turn.webViewHeight,
       margin: const EdgeInsets.only(bottom: 12),
+      key: ObjectKey(widget.data), // 关键：使用 ObjectKey 锁定 WebView 实体
       decoration: BoxDecoration(
         color: Colors.black45,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white10),
       ),
       clipBehavior: Clip.antiAlias,
-      child: WebViewWidget(controller: _controller),
+      child: InAppWebView(
+        initialFile: widget.data['htmlPath'],
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          transparentBackground: true,
+          allowFileAccessFromFileURLs: true,
+          allowUniversalAccessFromFileURLs: true,
+        ),
+        onWebViewCreated: (controller) {
+          _webViewController = controller;
+          controller.addJavaScriptHandler(
+            handlerName: 'FlutterAgentBridge',
+            callback: (args) {
+              try {
+                final String message = args[0];
+                final data = jsonDecode(message);
+                if (data['action'] == 'exit_roleplay') {
+                  widget.agent.injectInfo("Role play has ended, Now recover the identity of AI assistant.");
+                  widget.agent.isRoleplaying = false;
+                } else if (data['action'] == 'update_height') {
+                  if (data['height'] != null) {
+                    setState(() => _turn.webViewHeight = (data['height'] as num).toDouble());
+                  }
+                }
+              } catch (e) {
+                debugPrint("解析 WebView 显示失败: $e");
+              }
+            },
+          );
+        },
+        onLoadStop: (controller, url) async {
+          setState(() => _isPageFinished = true);
+          
+          await controller.evaluateJavascript(source: """
+            window.FlutterAgentBridge = {
+              postMessage: function(message) {
+                window.flutter_inappwebview.callHandler('FlutterAgentBridge', message);
+              }
+            };
+          """);
+
+          // 如果已有同步过的 JSON，优先同步最新的，否则同步初始数据
+          final jsonData = _turn.lastSyncedJson ?? widget.data['jsonData'] ?? "{}";
+          final escapedJson = jsonEncode(jsonData);
+          controller.evaluateJavascript(source: "if(window.onReceiveModelAction) window.onReceiveModelAction($escapedJson);");
+          
+          _updateHeight();
+        },
+      ),
     );
   }
 }
@@ -441,7 +478,7 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
       padding: const EdgeInsets.all(12),
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white10),
       ),
@@ -455,7 +492,7 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
                 const Icon(Icons.psychology_outlined, color: Colors.amber, size: 16),
                 const SizedBox(width: 8),
                 Text("Iris 正在思考...", 
-                  style: TextStyle(color: Colors.amber.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: TextStyle(color: Colors.amber.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 Icon(
                   _isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
@@ -472,7 +509,7 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
             Text(
               widget.thinking,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
+                color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 13,
                 height: 1.5,
                 fontStyle: FontStyle.italic,

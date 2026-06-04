@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Galgame Sandbox</title>
+    <style>
+        /* 基础重置：高度由内容驱动，防止视口拉伸 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: auto;
+            min-height: 0;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: #000;
+        }
+
+        /* 游戏主容器：高度由内部图片决定 */
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: auto;
+            overflow: hidden;
+            display: block;
+        }
+
+        /* 背景图片：宽度 100%，高度自适应 */
+        #bg-image {
+            width: 100%;
+            display: block;
+            margin: 0;
+            padding: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        /* 左上角退出图标 */
+        #exit-btn {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            width: 36px;
+            height: 36px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        #exit-btn:active { transform: scale(0.9); }
+
+        /* 下方台词框容器 */
+        #dialog-box {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.65) 80%, rgba(0,0,0,0) 100%);
+            padding: 10px 24px 10px 24px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* 角色名 */
+        #name {
+            color: #ff69b4;
+            font-weight: bold;
+            font-size: 16px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 4px rgba(255,105,180,0.6);
+            margin-bottom: 8px;
+        }
+
+        /* 精美分割线 */
+        .divider {
+            width: 90%;
+            height: 2px;
+            background: linear-gradient(to right, transparent, #ff69b4, #fff, #ff69b4, transparent);
+            box-shadow: 0 1px 3px rgba(255,105,180,0.4);
+            margin-bottom: 12px;
+        }
+
+        /* 台词与翻译切换按钮的组合行 */
+        #speech-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            position: relative;
+            min-height: 48px;
+        }
+
+        /* 台词正文：左右留出安全距离，防止文本遮挡右侧图标 */
+        #text {
+            font-size: 15px;
+            line-height: 1.6;
+            color: #ffffff;
+            text-align: center;
+            padding: 0 20px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* 翻译控制图标：绝对定位固定在右侧 */
+        #translate-toggle-btn {
+            position: absolute;
+            right: 2px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        #translate-toggle-btn:active { opacity: 1; transform: scale(0.9); }
+
+        /* 翻译文字：默认隐藏 (display: none)，色调柔和 */
+        #translation {
+            display: none;
+            font-size: 12px;
+            color: #cbd5e1;
+            text-align: center;
+            margin-top: 8px;
+            font-style: italic;
+            width: 100%;
+            padding: 0 40px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <img id="bg-image" src="images/character_normal.png" alt="background">
+
+    <div id="exit-btn" onclick="triggerExit()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+    </div>
+
+    <div id="dialog-box">
+        <div id="name">桜</div>
+        <div class="divider"></div>
+
+        <div id="speech-row">
+            <div id="text">こんにちは</div>
+            <div id="translate-toggle-btn" onclick="toggleTranslation()">
+                <svg id="translate-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path>
+                    <path d="M7 15l2.5-6 2.5 6M7.8 13h3.4"></path>
+                    <path d="M14 9h3M15.5 9v4M14 15c1 0 2.5-.5 3-2"></path>
+                </svg>
+            </div>
+        </div>
+
+        <div id="translation">你好</div>
+    </div>
+</div>
+
+<script src="index.js"></script>
+</body>
+</html>

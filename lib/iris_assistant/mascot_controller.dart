@@ -751,10 +751,11 @@ Ciallo～(∠・ω< )⌒☆你选择了这部分内容:\n
   
   Future<void> speakHelpText() async {
     if (_helpText.isEmpty) return;
-    String voice = 'zh-CN-XiaoxiaoNeural';
-    if (RegExp(r'[ぁ-んァ-ン]').hasMatch(_helpText)) {
-      voice = 'ja-JP-NanamiNeural';
-    }
+    String voice = 'ja-JP-NanamiNeural';
+    // String voice = 'zh-CN-XiaoxiaoNeural';
+    // if (RegExp(r'[ぁ-んァ-ン]').hasMatch(_helpText)) {
+    //   voice = 'ja-JP-NanamiNeural';
+    // }
     await _ttsService.speak(
       _helpText, 
       voiceName: voice,
@@ -769,17 +770,17 @@ Ciallo～(∠・ω< )⌒☆你选择了这部分内容:\n
     notifyListeners();
   }
 
-  Future<void> speak(String text) async {
+  Future<void> speak(String text, {String voice = "ja-JP-NanamiNeural"}) async {
     _currentDialogueText = text;
     String cleanText = _cleanTextForTts(text);
     if (cleanText.isEmpty) return;
 
-    String voice = 'zh-CN-XiaoxiaoNeural';
-    if (RegExp(r'[ぁ-んァ-ン]').hasMatch(text)) {
-      voice = 'ja-JP-NanamiNeural';
-    } else if (RegExp(r'[a-zA-Z]').hasMatch(text) && !RegExp(r'[\u4e00-\u9fa5]').hasMatch(text)) {
-      voice = 'en-US-AriaNeural';
-    }
+    // String voice = 'zh-CN-XiaoxiaoNeural';
+    // if (RegExp(r'[ぁ-んァ-ン]').hasMatch(text)) {
+    //   voice = 'ja-JP-NanamiNeural';
+    // } else if (RegExp(r'[a-zA-Z]').hasMatch(text) && !RegExp(r'[\u4e00-\u9fa5]').hasMatch(text)) {
+    //   voice = 'en-US-AriaNeural';
+    // }
     notifyListeners();
     await _ttsService.speak(
       cleanText,

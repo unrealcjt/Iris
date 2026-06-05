@@ -419,7 +419,7 @@ class _BrowserPageState extends State<BrowserPage> with SingleTickerProviderStat
 
     try {
       await _gemmaSkill.initialize();
-      final stream = _gemmaSkill.japaneseTranslate(content: text);
+      final stream = _gemmaSkill.japaneseTranslate(content: text, enableThinking: false);
       _translationResult = "";
       await for (final chunk in stream) {
         if (!mounted || !_showTranslationBubble) break;

@@ -280,12 +280,13 @@ Output format (Chinese reply):
     return _generate(prompt: prompt);
   }
   /// 日语翻译
-  Stream<String> japaneseTranslate({required String content, String targetLang = "Chinese"}) {
+  Stream<String> japaneseTranslate({required String content, String targetLang = "Chinese", bool? enableThinking}) {
     return _generate(
       prompt: """
 Translate the '$content' into $targetLang.
 When formatting the answer, output the the translation only.
-"""
+""",
+      enableThinking: enableThinking == null ? MascotController().isThinkingMode : enableThinking,
     );
   }
 

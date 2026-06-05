@@ -1,0 +1,77 @@
+plugins {
+    id("com.android.application")
+    id("kotlin-android")
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id("dev.flutter.flutter-gradle-plugin")
+}
+
+android {
+    namespace = "com.example.iris"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+//    kotlinOptions {
+//        jvmTarget = JavaVersion.VERSION_17.toString()
+//    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    defaultConfig {
+        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        applicationId = "com.example.iris"
+        // You can update the following values to match your application needs.
+        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        minSdk = 24
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+//        ndk { abiFilters.add("arm64-v8a") }
+    }
+
+    buildTypes {
+        release {
+            // 确保启用了签名配置
+            signingConfig = signingConfigs.getByName("debug")
+
+            // 正式版的应用名称
+            resValue("string", "app_name", "Iris")
+
+            // 🛠️ 关键修复：禁用混淆和资源压缩，解决 Release 模式插件通信失败 (channel-error)
+            isMinifyEnabled = false
+            isShrinkResources = false
+
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+
+            applicationIdSuffix = ".debug"
+
+            // [关键] Kotlin 中设置 resValue 的方法调用
+            resValue("string", "app_name", "IrisDebug")
+        }
+    }
+
+    // 加入以下 Lint 配置
+    @Suppress("DEPRECATION")
+    lintOptions {
+        isAbortOnError = false
+        isCheckReleaseBuilds = false
+    }
+}
+
+flutter {
+    source = "../.."
+}
+
+// 告诉 R8/Proguard：不要因为找不到某些类而中断编译
+project.extensions.extraProperties.set("android.r8.failOnMissingClasses", "false")

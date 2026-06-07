@@ -283,7 +283,7 @@ Output format (Chinese reply):
   Stream<String> japaneseTranslate({required String content, String targetLang = "Chinese", bool? enableThinking}) {
     return _generate(
       prompt: """
-Translate the '$content' into $targetLang.
+Determine the language of the '$content', understand the meaning by yourself, and translate it into $targetLang.
 When formatting the answer, output the the translation only.
 """,
       enableThinking: enableThinking == null ? MascotController().isThinkingMode : enableThinking,

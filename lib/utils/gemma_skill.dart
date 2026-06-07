@@ -152,6 +152,8 @@ format:
 ]
 """,
       imageBytes: imageBytes,
+      temperature: 0.8,
+      topK: 1
     );
   }
 
